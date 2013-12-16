@@ -1,0 +1,14 @@
+# For schemas
+colander==0.9.9
+
+# For serialization
+iso8601==0.1.8
+
+# scan/zscan/hscan/sscan are all in the 2.8 release
+-e git+https://github.com/andymccurdy/redis-py.git@e091c88bb81c5bdeb2da0ff36bb53763c8559984#egg=redis-master
+
+# For compat
+Flask==0.10.1
+
+# For testing 
+nose==1.3.0
