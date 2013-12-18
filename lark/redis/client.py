@@ -6,167 +6,243 @@ DEFAULT_INBOUND_SCHEMA = schemas.NoSchema
 DEFAULT_OUTBOUND_SCHEMA = schemas.OutboundResultSchema
 
 
-_RedisMethodDef = namedtuple('RedisMethodDef', 'inbound outbound')
+class RedisApiClientException(Exception):
+    pass
 
 
-class RedisMethodDef(_RedisMethodDef):
-
-    @classmethod
-    def from_kwargs(cls, inbound=DEFAULT_INBOUND_SCHEMA, outbound=DEFAULT_OUTBOUND_SCHEMA):
-        return cls(inbound, outbound)
-
-
-DEFAULT_SCHEMAS = RedisMethodDef(DEFAULT_INBOUND_SCHEMA, DEFAULT_OUTBOUND_SCHEMA)
+class RedisApiClientAuthException(RedisApiClientException):
+    pass
 
 
 class RedisApiClient(object):
 
     @classmethod
-    def from_request(cls, redis_method, r, request_json, get_query_dict, url_args, url_kwargs):
+    def from_request(cls, redis_method, r, request_json, get_query_dict, url_args, url_kwargs, request_scopes=set([])):
         redis_api_client = cls()
-        redis_args, redis_kwargs = redis_api_client.get_signature_from_request(redis_method, request_json, get_query_dict, url_args, url_kwargs)
+
+        # Check that method exisits
+        try:
+            redis_method_def = getattr(redis_api_client, redis_method)()
+        except AttributeError:
+            raise RedisApiClientException('%s is not a redis method' % redis_method)
+
+        # Check scopes
+        has_scopes = request_scopes & redis_method_def.scopes
+        if len(has_scopes) == 0:
+            raise RedisApiClientAuthException('Request has %s scopes and is required to have at least one of %s scopes' % (request_scopes, redis_method_def.scopes))
+
+        # Parse request for redis args
+        redis_args, redis_kwargs = redis_api_client.get_signature_from_request(redis_method_def, request_json, get_query_dict, url_args, url_kwargs)
+
+        # Execute redis method
         data = getattr(r, redis_method)(*redis_args, **redis_kwargs)
-        response_data = redis_api_client.format_redis_response_for_http(redis_method, data)
+
+        # Transform redis data into outbounc data format
+        response_data = redis_api_client.format_redis_response_for_http(redis_method_def, data)
 
         return response_data
 
-    def get_signature_from_request(self, redis_method, request_json, get_query_dict, url_args, url_kwargs):
-        # print 'args %s' % list(url_args)
-        # print 'kwargs %s' % url_kwargs
-        # print 'request.args %s' % get_query_dict
-        # print 'request_json %s' % request_json
+    def get_signature_from_request(self, redis_method_def, request_json, get_query_dict, url_args, url_kwargs):
+        # print 'args %s', % list(url_args)
+        # print 'kwargs %s', % url_kwargs
+        # print 'request.args %s', % get_query_dict
+        # print 'request_json %s', % request_json
 
-        InboundSchema = REDIST_METHOD_TO_SCHEMAS.get(redis_method, DEFAULT_SCHEMAS).inbound
-        if not InboundSchema:
-            InboundSchema = DEFAULT_INBOUND_SCHEMA
+        InboundSchema = redis_method_def.inbound
 
         args, kwargs = InboundSchema.from_request(url_args, url_kwargs, get_query_dict, request_json)
         return (args, kwargs)
 
-    def format_redis_response_for_http(self, redis_method, data):
-        OutboundSchema = REDIST_METHOD_TO_SCHEMAS.get(redis_method, DEFAULT_SCHEMAS).outbound
-        if not OutboundSchema:
-            OutboundSchema = DEFAULT_OUTBOUND_SCHEMA
-
-        data = OutboundSchema.serialize(data)
+    def format_redis_response_for_http(self, redis_method_def, data):
+        data = redis_method_def.outbound.serialize(data)
 
         return data
 
-no_args = ['bgrewriteaof', 'client_list', 'bgsave', 'client_getname', 'config_resetstat', 'dbsize', 'FLUSHALL', 'FLUSHDB', 'LASTSAVE',
-           'ping', 'save', 'randomkey']
+
+_RedisMethodDef = namedtuple('RedisMethodDef', 'method inbound outbound cmd_type write read')
+
+
+class RedisMethodDef(_RedisMethodDef):
+
+    @classmethod
+    def from_kwargs(cls, method, inbound, outbound, cmd_type, write, read):
+        if write == read:
+            raise Exception("Command %s has to be write or read" % (cmd_type))
+
+        return cls(inbound, outbound)
+
+    @property
+    def scopes(self):
+        scopes = set(['admin'])
+        if self.cmd_type != 'admin':
+            scopes.add('%s:*' % self.cmd_type)
+
+        if self.read:
+            scopes.add('read:*')
+            scopes.add('read:%s' % (self.method))
+
+        if self.write:
+            scopes.add('write:*')
+            scopes.add('write:%s' % (self.method))
+
+        return scopes
+
+
+def bind_api_method(method, inbound=DEFAULT_INBOUND_SCHEMA, outbound=DEFAULT_OUTBOUND_SCHEMA, cmd_type='admin', write=False, read=False):
+    redis_method_def = RedisMethodDef(method, inbound, outbound, cmd_type, write, read)
+
+    def run(self, *args, **kwargs):
+        return redis_method_def
+
+    doc = """
+    **Redispy method**: `%s`
+
+    Requires one of these scopes (%s)
+    """ % (method, ', '.join(list(redis_method_def.scopes)))
+
+    run.__doc__ = doc
+
+    setattr(RedisApiClient, method, run)
+
 
 # build_api_func(OBJECT: NoSchema)
 # def object(self, infotype, key):
 #     "Return the encoding, idletime, or refcount about the key"
 #     return self.execute_command('OBJECT', infotype, key, infotype=infotype)
 
-REDIST_METHOD_TO_SCHEMAS = {
-    'echo': RedisMethodDef.from_kwargs(schemas.ValueSchema),
-    'client_kill': RedisMethodDef.from_kwargs(schemas.AddressSchema),
-    'client_setname': RedisMethodDef.from_kwargs(schemas.NameSchema),
-    'config_get': RedisMethodDef.from_kwargs(schemas.PatternSchema),
-    'config_set': RedisMethodDef.from_kwargs(schemas.NameValueSchema),
-    'debug_object': RedisMethodDef.from_kwargs(schemas.KeySchema),
-    'info': RedisMethodDef.from_kwargs(schemas.SectionSchema),
-    'get': RedisMethodDef.from_kwargs(schemas.KeySchema, schemas.OutboundValueSchema),
-    'set': RedisMethodDef.from_kwargs(schemas.SetSchema),
-    'append': RedisMethodDef.from_kwargs(schemas.KeyValueSchema),
-    'setbit': RedisMethodDef.from_kwargs(schemas.NameOffsetBoolValueSchema),
-    'bitcount': RedisMethodDef.from_kwargs(schemas.KeyRangeOptionalSchema),
-    'bitop': RedisMethodDef.from_kwargs(schemas.OperationDestKeysSchema),
-    'decr': RedisMethodDef.from_kwargs(schemas.NameAmountSchema),
-    'delete': RedisMethodDef.from_kwargs(schemas.NamesSchema),
-    'dump': RedisMethodDef.from_kwargs(schemas.NameSchema),
-    'restore': RedisMethodDef.from_kwargs(schemas.NameTtlValueSchema),
-    'exists': RedisMethodDef.from_kwargs(schemas.KeySchema),
-    'expire': RedisMethodDef.from_kwargs(schemas.NameTimeSchema),
-    'expireat': RedisMethodDef.from_kwargs(schemas.NameWhenSchema),
-    'ttl': RedisMethodDef.from_kwargs(schemas.NameSchema),
-    'pexpire': RedisMethodDef.from_kwargs(schemas.NameTimeSchema),
-    'pexpireat': RedisMethodDef.from_kwargs(schemas.NameWhenSchema),
-    'pttl': RedisMethodDef.from_kwargs(schemas.NameSchema),
-    'psetex': RedisMethodDef.from_kwargs(schemas.NameTimeMsValueSchema),
-    'persist': RedisMethodDef.from_kwargs(schemas.NameSchema),
-    'getbit': RedisMethodDef.from_kwargs(schemas.NameOffsetSchema),
-    'getrange': RedisMethodDef.from_kwargs(schemas.KeyRangeSchema),
-    'getset': RedisMethodDef.from_kwargs(schemas.NameValueSchema),
-    'incr': RedisMethodDef.from_kwargs(schemas.NameAmountSchema, schemas.OutboundResultSchema),
-    'incrbyfloat': RedisMethodDef.from_kwargs(schemas.NameFloatAmountSchema, schemas.OutboundResultSchema),
-    'keys': RedisMethodDef.from_kwargs(schemas.PatternSchema),
-    'mget': RedisMethodDef.from_kwargs(schemas.KeyListSchema),
-    'mset': RedisMethodDef.from_kwargs(schemas.NameValueListSchema, schemas.OutboundValueSchema),
-    'msetnx': RedisMethodDef.from_kwargs(schemas.NameValueListSchema, schemas.OutboundValueSchema),
-    'rename': RedisMethodDef.from_kwargs(schemas.SrcDstSchema),
-    'renamenx': RedisMethodDef.from_kwargs(schemas.SrcDstSchema),
-    'setex': RedisMethodDef.from_kwargs(schemas.NameValueTimeSchema, schemas.OutboundValueSchema),
-    'setnx': RedisMethodDef.from_kwargs(schemas.NameValueSchema, schemas.OutboundValueSchema),
-    'setrange': RedisMethodDef.from_kwargs(schemas.NameOffsetStrValueSchema),
-    'strlen': RedisMethodDef.from_kwargs(schemas.NameSchema),
-    'substr': RedisMethodDef.from_kwargs(schemas.NameRangeEndOptionalSchema, schemas.OutboundValueSchema),
-    'type': RedisMethodDef.from_kwargs(schemas.NameSchema),
-    'blpop': RedisMethodDef.from_kwargs(schemas.KeysTimeoutSchema),
-    'brpop': RedisMethodDef.from_kwargs(schemas.KeysTimeoutSchema),
-    'brpoplpush': RedisMethodDef.from_kwargs(schemas.SrcDstTimeoutSchema),
-    'lindex': RedisMethodDef.from_kwargs(schemas.NameIndexSchema),
-    'linsert': RedisMethodDef.from_kwargs(schemas.NameWhereRefValueValueSchema),
-    'llen': RedisMethodDef.from_kwargs(schemas.NameSchema),
-    'lpop': RedisMethodDef.from_kwargs(schemas.NameSchema),
-    'lpush': RedisMethodDef.from_kwargs(schemas.NameValuesSchema),
-    'lpushx': RedisMethodDef.from_kwargs(schemas.NameValueSchema),
-    'lrange': RedisMethodDef.from_kwargs(schemas.NameRangeSchema),
-    'lrem': RedisMethodDef.from_kwargs(schemas.NameNumValueSchema),
-    'lset': RedisMethodDef.from_kwargs(schemas.NameIndexValueSchema),
-    'ltrim': RedisMethodDef.from_kwargs(schemas.NameRangeSchema),
-    'rpop': RedisMethodDef.from_kwargs(schemas.NameSchema),
-    'rpoplpush': RedisMethodDef.from_kwargs(schemas.SrcDstSchema),
-    'rpush': RedisMethodDef.from_kwargs(schemas.NameValuesSchema),
-    'rpushx': RedisMethodDef.from_kwargs(schemas.NameValueSchema),
-    'sort': RedisMethodDef.from_kwargs(schemas.SortSchema),
-    'scan': RedisMethodDef.from_kwargs(schemas.ScanSchema),
-    'sscan': RedisMethodDef.from_kwargs(schemas.NameScanSchema),
-    'hscan': RedisMethodDef.from_kwargs(schemas.NameScanSchema),
-    'zscan': RedisMethodDef.from_kwargs(schemas.NameScanSchema),
-    'sadd': RedisMethodDef.from_kwargs(schemas.NameValuesSchema),
-    'smembers': RedisMethodDef.from_kwargs(schemas.NameSchema),
-    'scard': RedisMethodDef.from_kwargs(schemas.NameSchema),
-    'sdiff': RedisMethodDef.from_kwargs(schemas.KeysSchema),
-    'sdiffstore': RedisMethodDef.from_kwargs(schemas.DestKeysSchema),
-    'sinter': RedisMethodDef.from_kwargs(schemas.KeysSchema),
-    'sinterstore': RedisMethodDef.from_kwargs(schemas.DestKeysSchema),
-    'sismember': RedisMethodDef.from_kwargs(schemas.NameValueSchema),
-    'smove': RedisMethodDef.from_kwargs(schemas.SrcDstValueSchema),
-    'spop': RedisMethodDef.from_kwargs(schemas.NameSchema),
-    'srandmember': RedisMethodDef.from_kwargs(schemas.NameNumberSchema),
-    'srem': RedisMethodDef.from_kwargs(schemas.RemNameValueListSchema),
-    'sunion': RedisMethodDef.from_kwargs(schemas.KeysSchema),
-    'sunionstore': RedisMethodDef.from_kwargs(schemas.DestKeysSchema),
-    'zadd': RedisMethodDef.from_kwargs(schemas.NameScoreListSchema),
-    'zcard': RedisMethodDef.from_kwargs(schemas.NameSchema),
-    'zcount': RedisMethodDef.from_kwargs(schemas.NameMinMaxSchema),
-    'zincrby': RedisMethodDef.from_kwargs(schemas.NameValueAmount),
-    'zinterstore': RedisMethodDef.from_kwargs(schemas.DestKeysAggregateSchema),
-    'zrange': RedisMethodDef.from_kwargs(schemas.ZrangeSchema),
-    'zrangebyscore': RedisMethodDef.from_kwargs(schemas.ZrangeByScoresSchema),
-    'zrevrangebyscore': RedisMethodDef.from_kwargs(schemas.ZrangeByScoresSchema),
-    'zrank': RedisMethodDef.from_kwargs(schemas.NameValueSchema),
-    'zrevrank': RedisMethodDef.from_kwargs(schemas.NameValueSchema),
-    'zrem': RedisMethodDef.from_kwargs(schemas.RemNameValueListSchema),
-    'zremrangebyrank': RedisMethodDef.from_kwargs(schemas.NameMinMaxSchema),
-    'zremrangebyscore': RedisMethodDef.from_kwargs(schemas.NameMinMaxSchema),
-    'zrevrange': RedisMethodDef.from_kwargs(schemas.ZrevRangeSchema),
-    'zscore': RedisMethodDef.from_kwargs(schemas.NameValueSchema),
-    'zunionstore': RedisMethodDef.from_kwargs(schemas.DestKeysAggregateSchema),
-    'hget': RedisMethodDef.from_kwargs(schemas.NameKeySchema),
-    'hgetall': RedisMethodDef.from_kwargs(schemas.NameSchema),
-    'hexists': RedisMethodDef.from_kwargs(schemas.NameKeySchema),
-    'hdel': RedisMethodDef.from_kwargs(schemas.NameKeysSchema),
-    'hincrby': RedisMethodDef.from_kwargs(schemas.NameKeyAmountSchema),
-    'hincrbyfloat': RedisMethodDef.from_kwargs(schemas.NameKeyFloatAmountSchema),
-    'hkeys': RedisMethodDef.from_kwargs(schemas.NameSchema),
-    'hlen': RedisMethodDef.from_kwargs(schemas.NameSchema),
-    'hset': RedisMethodDef.from_kwargs(schemas.NameKeyValueSchema),
-    'hsetnx': RedisMethodDef.from_kwargs(schemas.NameKeyValueSchema),
-    'hmset': RedisMethodDef.from_kwargs(schemas.NameMapingSchema),
-    'hmget': RedisMethodDef.from_kwargs(schemas.NameKeyListSchema),
-    'hvals': RedisMethodDef.from_kwargs(schemas.NameSchema),
-}
+
+# Admin commands
+bind_api_method('bgrewriteaof', write=True)
+bind_api_method('client_list', read=True)
+bind_api_method('bgsave', write=True)
+bind_api_method('client_getname', read=True)
+bind_api_method('client_setname', write=True, inbound=schemas.NameSchema)
+bind_api_method('client_kill', write=True, inbound=schemas.AddressSchema)
+bind_api_method('config_get', inbound=schemas.PatternSchema)
+bind_api_method('config_set', inbound=schemas.NameValueSchema)
+bind_api_method('config_resetstat', write=True)
+bind_api_method('dbsize', read=True)
+bind_api_method('flushall', write=True)
+bind_api_method('flushdb', write=True)
+bind_api_method('lastsave', read=True)
+bind_api_method('save', write=True)
+bind_api_method('debug_object', read=True, inbound=schemas.KeySchema)
+bind_api_method('info', read=True, inbound=schemas.SectionSchema)
+bind_api_method('ping', cmd_type='basic', read=True)
+bind_api_method('echo', cmd_type='basic', read=True, inbound=schemas.ValueSchema)
+
+# Keys
+bind_api_method('randomkey', cmd_type='key', read=True)
+bind_api_method('get', cmd_type='key', read=True, inbound=schemas.KeySchema, outbound=schemas.OutboundValueSchema)
+bind_api_method('set', cmd_type='key', write=True, inbound=schemas.SetSchema)
+bind_api_method('append', cmd_type='key', write=True, inbound=schemas.KeyValueSchema)
+bind_api_method('setbit', cmd_type='key', write=True, inbound=schemas.NameOffsetBoolValueSchema)
+bind_api_method('bitcount', cmd_type='key', read=True, inbound=schemas.KeyRangeOptionalSchema)
+bind_api_method('bitop', cmd_type='key', write=True, inbound=schemas.OperationDestKeysSchema)
+bind_api_method('decr', cmd_type='key', write=True, inbound=schemas.NameAmountSchema)
+bind_api_method('delete', cmd_type='key', write=True, inbound=schemas.NamesSchema)
+bind_api_method('dump', cmd_type='key', read=True, inbound=schemas.NameSchema)
+bind_api_method('restore', cmd_type='key', write=True, inbound=schemas.NameTtlValueSchema)
+bind_api_method('exists', cmd_type='key', read=True, inbound=schemas.KeySchema)
+bind_api_method('expire', cmd_type='key', write=True, inbound=schemas.NameTimeSchema)
+bind_api_method('expireat', cmd_type='key', write=True, inbound=schemas.NameWhenSchema)
+bind_api_method('ttl', cmd_type='key', read=True, inbound=schemas.NameSchema)
+bind_api_method('pexpire', cmd_type='key', write=True, inbound=schemas.NameTimeSchema)
+bind_api_method('pexpireat', cmd_type='key', write=True, inbound=schemas.NameWhenSchema)
+bind_api_method('pttl', cmd_type='key', read=True, inbound=schemas.NameSchema)
+bind_api_method('psetex', cmd_type='key', write=True, inbound=schemas.NameTimeMsValueSchema)
+bind_api_method('persist', cmd_type='key', write=True, inbound=schemas.NameSchema)
+bind_api_method('getbit', cmd_type='key', read=True, inbound=schemas.NameOffsetSchema)
+bind_api_method('getrange', cmd_type='key', read=True, inbound=schemas.KeyRangeSchema)
+bind_api_method('getset', cmd_type='key', read=True, inbound=schemas.NameValueSchema)
+bind_api_method('incr', cmd_type='key', write=True, inbound=schemas.NameAmountSchema, outbound=schemas.OutboundResultSchema)
+bind_api_method('incrbyfloat', cmd_type='key', inbound=schemas.NameFloatAmountSchema, outbound=schemas.OutboundResultSchema)
+bind_api_method('keys', cmd_type='key', read=True, inbound=schemas.PatternSchema)
+bind_api_method('mget', cmd_type='key', read=True, inbound=schemas.KeyListSchema)
+bind_api_method('mset', cmd_type='key', write=True, inbound=schemas.NameValueListSchema, outbound=schemas.OutboundValueSchema)
+bind_api_method('msetnx', cmd_type='key', write=True, inbound=schemas.NameValueListSchema, outbound=schemas.OutboundValueSchema)
+bind_api_method('rename', cmd_type='key', write=True, inbound=schemas.SrcDstSchema)
+bind_api_method('renamenx', cmd_type='key', write=True, inbound=schemas.SrcDstSchema)
+bind_api_method('setex', cmd_type='key', write=True, inbound=schemas.NameValueTimeSchema, outbound=schemas.OutboundValueSchema)
+bind_api_method('setnx', cmd_type='key', write=True, inbound=schemas.NameValueSchema, outbound=schemas.OutboundValueSchema)
+bind_api_method('setrange', cmd_type='key', inbound=schemas.NameOffsetStrValueSchema)
+bind_api_method('strlen', cmd_type='key', read=True, inbound=schemas.NameSchema)
+bind_api_method('substr', cmd_type='key', read=True, inbound=schemas.NameRangeEndOptionalSchema, outbound=schemas.OutboundValueSchema)
+bind_api_method('type', cmd_type='key', read=True, inbound=schemas.NameSchema)
+
+# Lists
+bind_api_method('blpop', cmd_type='list', write=True, inbound=schemas.KeysTimeoutSchema)
+bind_api_method('brpop', cmd_type='list', write=True, inbound=schemas.KeysTimeoutSchema)
+bind_api_method('brpoplpush', cmd_type='list', write=True, inbound=schemas.SrcDstTimeoutSchema)
+bind_api_method('lindex', cmd_type='list', read=True, inbound=schemas.NameIndexSchema)
+bind_api_method('linsert', cmd_type='list', write=True, inbound=schemas.NameWhereRefValueValueSchema)
+bind_api_method('llen', cmd_type='list', read=True, inbound=schemas.NameSchema)
+bind_api_method('lpop', cmd_type='list', write=True, inbound=schemas.NameSchema)
+bind_api_method('lpush', cmd_type='list', write=True, inbound=schemas.NameValuesSchema)
+bind_api_method('lpushx', cmd_type='list', write=True, inbound=schemas.NameValueSchema)
+bind_api_method('lrange', cmd_type='list', read=True, inbound=schemas.NameRangeSchema)
+bind_api_method('lrem', cmd_type='list', write=True, inbound=schemas.NameNumValueSchema)
+bind_api_method('lset', cmd_type='list', write=True, inbound=schemas.NameIndexValueSchema)
+bind_api_method('ltrim', cmd_type='list', write=True, inbound=schemas.NameRangeSchema)
+bind_api_method('rpop', cmd_type='list', write=True, inbound=schemas.NameSchema)
+bind_api_method('rpoplpush', cmd_type='list', write=True, inbound=schemas.SrcDstSchema)
+bind_api_method('rpush', cmd_type='list', write=True, inbound=schemas.NameValuesSchema)
+bind_api_method('rpushx', cmd_type='list', write=True, inbound=schemas.NameValueSchema)
+
+# Sorting
+bind_api_method('sort', cmd_type='sort', write=True, inbound=schemas.SortSchema)
+
+# Scaning
+bind_api_method('scan', cmd_type='scan', read=True, inbound=schemas.ScanSchema)
+bind_api_method('sscan', cmd_type='scan', read=True, inbound=schemas.NameScanSchema)
+bind_api_method('hscan', cmd_type='scan', read=True, inbound=schemas.NameScanSchema)
+bind_api_method('zscan', cmd_type='scan', read=True, inbound=schemas.NameScanSchema)
+
+# Sets
+bind_api_method('sadd', cmd_type='sets', write=True, inbound=schemas.NameValuesSchema)
+bind_api_method('smembers', cmd_type='sets', read=True, inbound=schemas.NameSchema)
+bind_api_method('scard', cmd_type='sets', read=True, inbound=schemas.NameSchema)
+bind_api_method('sdiff', cmd_type='sets', read=True, inbound=schemas.KeysSchema)
+bind_api_method('sdiffstore', cmd_type='sets', write=True, inbound=schemas.DestKeysSchema)
+bind_api_method('sinter', cmd_type='sets', read=True, inbound=schemas.KeysSchema)
+bind_api_method('sinterstore', cmd_type='sets', write=True, inbound=schemas.DestKeysSchema)
+bind_api_method('sismember', cmd_type='sets', read=True, inbound=schemas.NameValueSchema)
+bind_api_method('smove', cmd_type='sets', write=True, inbound=schemas.SrcDstValueSchema)
+bind_api_method('spop', cmd_type='sets', write=True, inbound=schemas.NameSchema)
+bind_api_method('srandmember', cmd_type='sets', read=True, inbound=schemas.NameNumberSchema)
+bind_api_method('srem', cmd_type='sets', write=True, inbound=schemas.RemNameValueListSchema)
+bind_api_method('sunion', cmd_type='sets', read=True, inbound=schemas.KeysSchema)
+bind_api_method('sunionstore', cmd_type='sets', write=True, inbound=schemas.DestKeysSchema)
+
+# Sorted Sets
+bind_api_method('zadd', cmd_type='sorted_sets', write=True, inbound=schemas.NameScoreListSchema)
+bind_api_method('zcard', cmd_type='sorted_sets', read=True, inbound=schemas.NameSchema)
+bind_api_method('zcount', cmd_type='sorted_sets', read=True, inbound=schemas.NameMinMaxSchema)
+bind_api_method('zincrby', cmd_type='sorted_sets', write=True, inbound=schemas.NameValueAmount)
+bind_api_method('zinterstore', cmd_type='sorted_sets', write=True, inbound=schemas.DestKeysAggregateSchema)
+bind_api_method('zrange', cmd_type='sorted_sets', read=True, inbound=schemas.ZrangeSchema)
+bind_api_method('zrangebyscore', cmd_type='sorted_sets', read=True, inbound=schemas.ZrangeByScoresSchema)
+bind_api_method('zrevrangebyscore', cmd_type='sorted_sets', read=True, inbound=schemas.ZrangeByScoresSchema)
+bind_api_method('zrank', cmd_type='sorted_sets', read=True, inbound=schemas.NameValueSchema)
+bind_api_method('zrevrank', cmd_type='sorted_sets', read=True, inbound=schemas.NameValueSchema)
+bind_api_method('zrem', cmd_type='sorted_sets', write=True, inbound=schemas.RemNameValueListSchema)
+bind_api_method('zremrangebyrank', cmd_type='sorted_sets', inbound=schemas.NameMinMaxSchema)
+bind_api_method('zremrangebyscore', cmd_type='sorted_sets', inbound=schemas.NameMinMaxSchema)
+bind_api_method('zrevrange', cmd_type='sorted_sets', read=True, inbound=schemas.ZrevRangeSchema)
+bind_api_method('zscore', cmd_type='sorted_sets', read=True, inbound=schemas.NameValueSchema)
+bind_api_method('zunionstore', cmd_type='sorted_sets', inbound=schemas.DestKeysAggregateSchema)
+
+# Hashes
+bind_api_method('hget', cmd_type='hashes', read=True, inbound=schemas.NameKeySchema)
+bind_api_method('hgetall', cmd_type='hashes', read=True, inbound=schemas.NameSchema)
+bind_api_method('hexists', cmd_type='hashes', read=True, inbound=schemas.NameKeySchema)
+bind_api_method('hdel', cmd_type='hashes', write=True, inbound=schemas.NameKeysSchema)
+bind_api_method('hincrby', cmd_type='hashes', write=True, inbound=schemas.NameKeyAmountSchema)
+bind_api_method('hincrbyfloat', cmd_type='hashes', write=True, inbound=schemas.NameKeyFloatAmountSchema)
+bind_api_method('hkeys', cmd_type='hashes', read=True, inbound=schemas.NameSchema)
+bind_api_method('hlen', cmd_type='hashes', read=True, inbound=schemas.NameSchema)
+bind_api_method('hset', cmd_type='hashes', write=True, inbound=schemas.NameKeyValueSchema)
+bind_api_method('hsetnx', cmd_type='hashes', write=True, inbound=schemas.NameKeyValueSchema)
+bind_api_method('hmset', cmd_type='hashes', write=True, inbound=schemas.NameMapingSchema)
+bind_api_method('hmget', cmd_type='hashes', read=True, inbound=schemas.NameKeyListSchema)
+bind_api_method('hvals', cmd_type='hashes', read=True, inbound=schemas.NameSchema)

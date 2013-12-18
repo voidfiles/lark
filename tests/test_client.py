@@ -16,14 +16,17 @@ from lark.ext.flask.flask_redis import Redis
 app = Flask(__name__)
 app.config['REDIS_URL'] = 'redis://localhost:6379/10'
 app.config['DEBUG'] = True
+app.config['DEFAULT_LARK_SCOPES'] = set(['admin'])
 Redis(app)
 app.register_blueprint(redis_api_blueprint, url_prefix='/api/0')
+
 
 class TestRedisCommands(unittest.TestCase):
 
     def setUp(self):
+        self.app_ref = app
         self.app = app.test_client()
-        
+
     def tearDown(self):
         self.api_request('/FLUSHDB/', method='DELETE')
 
@@ -59,6 +62,22 @@ class TestRedisCommands(unittest.TestCase):
         return data
 
     ### SERVER INFORMATION ###
+    def test_scope_getter(self):
+        DEFAULT_LARK_SCOPES = self.app_ref.config['DEFAULT_LARK_SCOPES']
+        self.app_ref.config['DEFAULT_LARK_SCOPES'] = None
+
+        def scope_getter(*args, **kwargs):
+            return set(['admin'])
+
+        self.app_ref.config['LARK_SCOPE_GETTER'] = scope_getter
+
+        meta, data = self.api_request('/CLIENT/LIST/')
+        assert isinstance(data[0], dict)
+        assert 'addr' in data[0]
+
+        self.app_ref.config['DEFAULT_LARK_SCOPES'] = DEFAULT_LARK_SCOPES
+        self.app_ref.config['LARK_SCOPE_GETTER'] = None
+
     def test_client_list(self):
         meta, data = self.api_request('/CLIENT/LIST/')
         assert isinstance(data[0], dict)

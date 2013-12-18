@@ -2,7 +2,7 @@ import datetime
 import json
 import functools
 from redis.exceptions import DataError
-from flask import Blueprint, make_response, g, request
+from flask import Blueprint, make_response, g, request, current_app
 from colander import Invalid
 from lark.redis.client import RedisApiClient
 
@@ -37,7 +37,17 @@ def query_redis(redispy_method, *args, **kwargs):
             request_json = request.get_json()
         except:
             request_json = None
-        data = RedisApiClient.from_request(redispy_method, g.r, request_json, request.args, args, kwargs)
+
+        scopes = None
+        default_scopes = current_app.config.get('DEFAULT_LARK_SCOPES', set())
+        scope_getter = current_app.config.get('LARK_SCOPE_GETTER')
+        if scope_getter:
+            scopes = scope_getter(redispy_method, request_json, request.args, args, kwargs)
+
+        if scopes is None:
+            scopes = default_scopes
+
+        data = RedisApiClient.from_request(redispy_method, g.r, request_json, request.args, args, kwargs, scopes)
         resp_envelope = {
             'meta': {
                 'status': 'ok',
