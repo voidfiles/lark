@@ -101,13 +101,13 @@ class TestRedisCommands(unittest.TestCase):
         meta, data = self.api_request('/CONFIG/GET/')
         maxclients = data['maxclients']
         try:
-            meta, data = self.api_request('/CONFIG/SET/', method='POST',
-                                          data={'name': 'maxclients', 'value': '9999'})
+            meta, data = self.api_request('/CONFIG/SET/maxclients/', method='POST',
+                                          data={'value': '9999'})
             meta, data = self.api_request('/CONFIG/GET/')
             assert data['maxclients'] == '9999'
         finally:
-            meta, data = self.api_request('/CONFIG/SET/', method='POST',
-                                          data={'name': 'maxclients', 'value': maxclients})
+            meta, data = self.api_request('/CONFIG/SET/maxclients/', method='POST',
+                                          data={'value': maxclients})
 
     def test_dbsize(self):
         self.api_request('/SET/a/', method='POST', data={'value': 'foo'})
@@ -162,16 +162,16 @@ class TestRedisCommands(unittest.TestCase):
         assert data == 'a1a2'
 
     def test_bitcount(self):
-        self.arp('/SETBIT/', data={'name': 'a', 'offset': 5, 'value': True})
+        self.arp('/SETBIT/a/', data={'offset': 5, 'value': True})
         assert self.arg('/BITCOUNT/a/') == 1
-        self.arp('/SETBIT/', data={'name': 'a', 'offset': 6, 'value': True})
+        self.arp('/SETBIT/a/', data={'offset': 6, 'value': True})
         assert self.arg('/BITCOUNT/a/') == 2
-        self.arp('/SETBIT/', data={'name': 'a', 'offset': 5, 'value': False})
+        self.arp('/SETBIT/a/', data={'offset': 5, 'value': False})
         assert self.arg('/BITCOUNT/a/') == 1
-        self.arp('/SETBIT/', data={'name': 'a', 'offset': 9, 'value': True})
-        self.arp('/SETBIT/', data={'name': 'a', 'offset': 17, 'value': True})
-        self.arp('/SETBIT/', data={'name': 'a', 'offset': 25, 'value': True})
-        self.arp('/SETBIT/', data={'name': 'a', 'offset': 33, 'value': True})
+        self.arp('/SETBIT/a/', data={'offset': 9, 'value': True})
+        self.arp('/SETBIT/a/', data={'offset': 17, 'value': True})
+        self.arp('/SETBIT/a/', data={'offset': 25, 'value': True})
+        self.arp('/SETBIT/a/', data={'offset': 33, 'value': True})
         assert self.arg('/BITCOUNT/a/') == 5
         assert self.arg('/BITCOUNT/a/0/-1/') == 5
         assert self.arg('/BITCOUNT/a/2/3/') == 2
@@ -219,23 +219,23 @@ class TestRedisCommands(unittest.TestCase):
     #     assert int(binascii.hexlify(self.arg('/GET/res3/')), 16) == 0x000000FF
 
     def test_decr(self):
-        self.api_request('/DECR/', method='POST', data={'name': 'a'})
-        _, data = self.api_request('/GET/a/')
+        self.arp('/DECR/a/')
+        data = self.arg('/GET/a/')
         assert data == '-1'
-        _, data = self.api_request('/DECR/', method='POST', data={'name': 'a'})
+        data = self.arp('/DECR/a/')
         assert data == -2
-        _, data = self.api_request('/GET/a/')
+        data = self.arg('/GET/a/')
         assert data == '-2'
-        _, data = self.api_request('/DECRBY/', method='POST', data={'name': 'a', 'amount': '5'})
+        data = self.arp('/DECRBY/a/', data={'amount': '5'})
         assert data == -7
-        _, data = self.api_request('/GET/a/')
+        data = self.arg('/GET/a/')
         assert data == b('-7')
 
     def test_delete(self):
-        _, data = self.api_request('/DEL/a/', method='DELETE')
+        data = self.ard('/DEL/a/')
         assert data == 0
         self.arp('/SET/a/', {'value': 'foo'})
-        _, data = self.api_request('/DEL/a/', method='DELETE')
+        data = self.ard('/DEL/a/')
         assert data == 1
 
     def test_delete_with_multiple_keys(self):
@@ -259,14 +259,14 @@ class TestRedisCommands(unittest.TestCase):
         assert data
 
     def test_expire(self):
-        _, data = self.api_request('/EXPIRE/', method='POST', data={'name': 'a', 'time': 10})
+        data = self.arp('/EXPIRE/a/', {'time': 10})
         assert not data
         self.arp('/SET/a/', {'value': 'foo'})
-        _, data = self.api_request('/EXPIRE/', method='POST', data={'name': 'a', 'time': 10})
+        data = self.arp('/EXPIRE/a/', {'time': 10})
         assert data
         data = self.arg('/TTL/a/')
         assert 0 < data <= 10
-        data = self.arp('/PERSIST/', {'name': 'a'})
+        data = self.arp('/PERSIST/a/')
         assert data
         data = self.arg('/TTL/a/')
         assert not data
@@ -274,13 +274,13 @@ class TestRedisCommands(unittest.TestCase):
     def test_expireat_datetime(self):
         expire_at = datetime.datetime.now() + datetime.timedelta(minutes=1)
         self.arp('/SET/a/', {'value': 'foo'})
-        self.api_request('/EXPIREAT/', method='POST', data={'name': 'a', 'when': expire_at.isoformat()})
-        _, data = self.api_request('/TTL/a/')
+        self.arp('/EXPIREAT/a/', {'when': expire_at.isoformat()})
+        data = self.arg('/TTL/a/')
         assert 0 < data <= 60
 
     def test_expireat_no_key(self):
         expire_at = datetime.datetime.now() + datetime.timedelta(minutes=1)
-        _, data = self.api_request('/EXPIREAT/', method='POST', data={'name': 'a', 'when': expire_at.isoformat()})
+        data = self.arp('/EXPIREAT/a/', {'when': expire_at.isoformat()})
         assert not data
 
     def test_get_and_set(self):
@@ -301,20 +301,20 @@ class TestRedisCommands(unittest.TestCase):
         _, data = self.api_request('/GETBIT/a/5/')
         assert not data
         # set bit 5
-        self.api_request('/SETBIT/', method='POST', data={'name': 'a', 'offset': 5, 'value': True})
+        self.api_request('/SETBIT/a/', method='POST', data={'offset': 5, 'value': True})
         _, data = self.api_request('/GETBIT/a/5/')
         # unset bit 4
-        _, data = self.api_request('/SETBIT/', method='POST',  data={'name': 'a', 'offset': 4, 'value': False})
+        _, data = self.api_request('/SETBIT/a/', method='POST', data={'offset': 4, 'value': False})
         assert not data
         _, data = self.api_request('/GETBIT/a/4/')
         assert not data
         # set bit 4
-        _, data = self.api_request('/SETBIT/', method='POST',  data={'name': 'a', 'offset': 4, 'value': True})
+        _, data = self.api_request('/SETBIT/a/', method='POST', data={'offset': 4, 'value': True})
         assert not data
         _, data = self.api_request('/GETBIT/a/4/')
         assert data
         # set bit 5 again
-        _, data = self.api_request('/SETBIT/', method='POST',  data={'name': 'a', 'offset': 5, 'value': True})
+        _, data = self.api_request('/SETBIT/a/', method='POST', data={'offset': 5, 'value': True})
         assert data
         _, data = self.api_request('/GETBIT/a/5/')
         assert data
@@ -329,9 +329,9 @@ class TestRedisCommands(unittest.TestCase):
         assert data == b('')
 
     def test_getset(self):
-        _, data = self.api_request('/GETSET/', method='POST', data={'name': 'a', 'value': 'foo'})
+        _, data = self.api_request('/GETSET/a/', method='POST', data={'value': 'foo'})
         assert data is None
-        _, data = self.api_request('/GETSET/', method='POST', data={'name': 'a', 'value': 'bar'})
+        _, data = self.api_request('/GETSET/a/', method='POST', data={'value': 'bar'})
         assert data == b('foo')
 
     def test_incr(self):
@@ -404,19 +404,19 @@ class TestRedisCommands(unittest.TestCase):
         assert data is None
 
     def test_pexpire(self):
-        assert not self.arp('/PEXPIRE/', {'name': 'a', 'time': 60000})
+        assert not self.arp('/PEXPIRE/a/', {'time': 60000})
         self.arp('/SET/a/', {'value': 'foo'})
-        assert self.arp('/PEXPIRE/', {'name': 'a', 'time': 60000})
+        assert self.arp('/PEXPIRE/a/', {'time': 60000})
         assert 0 < self.arg('/PTTL/a/') <= 60000
-        assert self.arp('/PERSIST/', {'name': 'a'})
+        assert self.arp('/PERSIST/a/')
         assert self.arg('/PTTL/a/') is None
 
     def test_pexpireat_no_key(self):
         expire_at = datetime.datetime.now() + datetime.timedelta(minutes=1)
-        assert not self.arp('/PEXPIREAT/', {'name': 'a', 'when': expire_at.isoformat()})
+        assert not self.arp('/PEXPIREAT/a/', {'when': expire_at.isoformat()})
 
     def test_psetex(self):
-        assert self.arp('/PSETEX/', {'name': 'a', 'time_ms': 1000, 'value': 'value'})
+        assert self.arp('/PSETEX/a/', {'time_ms': 1000, 'value': 'value'})
         assert self.arg('/GET/a/') == b('value')
         assert 0 < self.arg('/PTTL/a/') <= 1000
 
@@ -424,7 +424,7 @@ class TestRedisCommands(unittest.TestCase):
         _, data = self.api_request('/RANDOMKEY/')
         assert data is None
         for key in ('a', 'b', 'c'):
-            self.api_request('/SET/%s/' % key, method='POST', data={ 'value': '1'})
+            self.api_request('/SET/%s/' % key, method='POST', data={'value': '1'})
         _, data = self.api_request('/RANDOMKEY/')
         assert data in (b('a'), b('b'), b('c'))
 
@@ -475,7 +475,7 @@ class TestRedisCommands(unittest.TestCase):
         assert 0 < self.arg('/TTL/a/') <= 10
 
     def test_setex(self):
-        _, data = self.api_request('/SETEX/', method='POST', data={'name': 'a', 'value': '1', 'time': 60})
+        _, data = self.api_request('/SETEX/a/', method='POST', data={'value': '1', 'time': 60})
         assert data
         _, data = self.api_request('/GET/a/')
         assert data == b('1')
@@ -483,22 +483,22 @@ class TestRedisCommands(unittest.TestCase):
         assert 0 < data <= 60
 
     def test_setnx(self):
-        _, data = self.api_request('/SETNX/', method='POST', data={'name': 'a', 'value': '1'})
+        _, data = self.api_request('/SETNX/a/', method='POST', data={'value': '1'})
         assert data
         _, data = self.api_request('/GET/a/')
         assert data == b('1')
-        _, data = self.api_request('/SETNX/', method='POST', data={'name': 'a', 'value': '2'})
+        _, data = self.api_request('/SETNX/a/', method='POST', data={'value': '2'})
         assert not data
         _, data = self.api_request('/GET/a/')
         assert data == '1'
 
     def test_setrange(self):
-        _, data = self.api_request('/SETRANGE/', method='POST', data={'name': 'a', 'offset': 5, 'value': 'foo'})
+        _, data = self.api_request('/SETRANGE/a/', method='POST', data={'offset': 5, 'value': 'foo'})
         assert data == 8
         _, data = self.api_request('/GET/a/')
         assert data == b('\0\0\0\0\0foo')
         _, data = self.api_request('/SET/a/', method='POST', data={'value': 'abcdefghijh'})
-        _, data = self.api_request('/SETRANGE/', method='POST', data={'name': 'a', 'offset': 6, 'value': '12345'})
+        _, data = self.api_request('/SETRANGE/a/', method='POST', data={'offset': 6, 'value': '12345'})
         assert data
         _, data = self.api_request('/GET/a/')
         assert data == b('abcdef12345')
@@ -525,10 +525,10 @@ class TestRedisCommands(unittest.TestCase):
         self.arp('/SET/a/', {'value': '1'})
         assert self.arg('/TYPE/a/') == b('string')
         self.ard('/DEL/a/')
-        self.arp('/LPUSH/', {'name': 'a', 'values': ['1']})
+        self.arp('/LPUSH/a/', {'values': ['1']})
         assert self.arg('/TYPE/a/') == b('list')
         self.ard('/DEL/a/')
-        self.arp('/SADD/', data={'name': 'a', 'values': ['1']})
+        self.arp('/SADD/a/', data={'values': ['1']})
         assert self.arg('/TYPE/a/') == b('set')
         self.ard('/DEL/a/')
         self.arp('/ZADD/a/', {'scores': [('a1', 1), ('a2', 2), ('a3', 3)]})
@@ -537,8 +537,8 @@ class TestRedisCommands(unittest.TestCase):
     #### LIST COMMANDS ####
     #@unittest.skip('Include later')
     def test_blpop(self):
-        self.api_request('/RPUSH/', method='POST', data={'name': 'a', 'values': ['1', '2']})
-        self.api_request('/RPUSH/', method='POST', data={'name': 'b', 'values': ['3', '4']})
+        self.api_request('/RPUSH/a/', method='POST', data={'values': ['1', '2']})
+        self.api_request('/RPUSH/b/', method='POST', data={'values': ['3', '4']})
         _, data = self.api_request('/BLPOP/', method='POST', data={'keys': ['b', 'a'], 'timeout': 1})
         assert data == [b('b'), b('3')]
         _, data = self.api_request('/BLPOP/', method='POST', data={'keys': ['b', 'a'], 'timeout': 1})
@@ -549,14 +549,14 @@ class TestRedisCommands(unittest.TestCase):
         assert data == [b('a'), b('2')]
         _, data = self.api_request('/BLPOP/', method='POST', data={'keys': ['b', 'a'], 'timeout': 1})
         assert data is None
-        self.api_request('/RPUSH/', method='POST', data={'name': 'c', 'values': ['1']})
+        self.api_request('/RPUSH/c/', method='POST', data={'values': ['1']})
         _, data = self.api_request('/BLPOP/', method='POST', data={'keys': ['c'], 'timeout': 1})
         assert data == [b('c'), b('1')]
 
     #@unittest.skip('Include later')
     def test_brpop(self):
-        self.api_request('/RPUSH/', method='POST', data={'name': 'a', 'values': ['1', '2']})
-        self.api_request('/RPUSH/', method='POST', data={'name': 'b', 'values': ['3', '4']})
+        self.api_request('/RPUSH/a/', method='POST', data={'values': ['1', '2']})
+        self.api_request('/RPUSH/b/', method='POST', data={'values': ['3', '4']})
         _, data = self.api_request('/BRPOP/', method='POST', data={'keys': ['b', 'a'], 'timeout': 1})
         assert data == [b('b'), b('4')]
         _, data = self.api_request('/BRPOP/', method='POST', data={'keys': ['b', 'a'], 'timeout': 1})
@@ -567,14 +567,14 @@ class TestRedisCommands(unittest.TestCase):
         assert data == [b('a'), b('1')]
         _, data = self.api_request('/BRPOP/', method='POST', data={'keys': ['b', 'a'], 'timeout': 1})
         assert data is None
-        self.api_request('/RPUSH/', method='POST', data={'name': 'c', 'values': ['1']})
+        self.api_request('/RPUSH/c/', method='POST', data={'values': ['1']})
         _, data = self.api_request('/BRPOP/', method='POST', data={'keys': ['c'], 'timeout': 1})
         assert data == [b('c'), b('1')]
 
-    @unittest.skip('Include later')
+    #@unittest.skip('Include later')
     def test_brpoplpush(self):
-        self.api_request('/RPUSH/', method='POST', data={'name': 'a', 'values': ['1', '2']})
-        self.api_request('/RPUSH/', method='POST', data={'name': 'b', 'values': ['3', '4']})
+        self.api_request('/RPUSH/a/', method='POST', data={'values': ['1', '2']})
+        self.api_request('/RPUSH/b/', method='POST', data={'values': ['3', '4']})
         _, data = self.api_request('/BRPOPLPUSH/', method='POST', data={'src': 'a', 'dst': 'b'})
         assert data == b('2')
         _, data = self.api_request('/BRPOPLPUSH/', method='POST', data={'src': 'a', 'dst': 'b'})
@@ -587,12 +587,12 @@ class TestRedisCommands(unittest.TestCase):
         assert data == [b('1'), b('2'), b('3'), b('4')]
 
     def test_brpoplpush_empty_string(self):
-        self.api_request('/RPUSH/', method='POST', data={'name': 'a', 'values': ['']})
+        self.api_request('/RPUSH/a/', method='POST', data={'values': ['']})
         _, data = self.api_request('/BRPOPLPUSH/', method='POST', data={'src': 'a', 'dst': 'b'})
         assert data == b('')
 
     def test_lindex(self):
-        self.api_request('/RPUSH/', method='POST', data={'name': 'a', 'values': ['1', '2', '3']})
+        self.api_request('/RPUSH/a/', method='POST', data={'values': ['1', '2', '3']})
         _, data = self.api_request('/LINDEX/a/0/')
         assert data == b('1')
         _, data = self.api_request('/LINDEX/a/1/')
@@ -601,55 +601,55 @@ class TestRedisCommands(unittest.TestCase):
         assert data == b('3')
 
     def test_linsert(self):
-        self.api_request('/RPUSH/', method='POST', data={'name': 'a', 'values': ['1', '2', '3']})
-        _, data = self.api_request('/LINSERT/', method='POST', data={'name': 'a', 'where': 'after', 'refvalue': '2', 'value': '2.5'})
+        self.api_request('/RPUSH/a/', method='POST', data={'values': ['1', '2', '3']})
+        _, data = self.api_request('/LINSERT/a/', method='POST', data={'where': 'after', 'refvalue': '2', 'value': '2.5'})
         assert data == 4
         _, data = self.api_request('/LRANGE/a/0/-1/')
         assert data == [b('1'), b('2'), b('2.5'), b('3')]
-        _, data = self.api_request('/LINSERT/', method='POST', data={'name': 'a', 'where': 'before', 'refvalue': '2', 'value': '1.5'})
+        _, data = self.api_request('/LINSERT/a/', method='POST', data={'where': 'before', 'refvalue': '2', 'value': '1.5'})
         assert data == 5
         _, data = self.api_request('/LRANGE/a/0/-1/')
         assert data == [b('1'), b('1.5'), b('2'), b('2.5'), b('3')]
 
     def test_llen(self):
-        self.api_request('/RPUSH/', method='POST', data={'name': 'a', 'values': ['1', '2', '3']})
+        self.api_request('/RPUSH/a/', method='POST', data={'values': ['1', '2', '3']})
         _, data = self.api_request('/LLEN/a/')
         assert data == 3
 
     def test_lpop(self):
-        self.api_request('/RPUSH/', method='POST', data={'name': 'a', 'values': ['1', '2', '3']})
-        _, data = self.api_request('/LPOP/', method='POST', data={'name': 'a'})
+        self.api_request('/RPUSH/a/', method='POST', data={'values': ['1', '2', '3']})
+        _, data = self.api_request('/LPOP/a/', method='POST')
         assert data == b('1')
-        _, data = self.api_request('/LPOP/', method='POST', data={'name': 'a'})
+        _, data = self.api_request('/LPOP/a/', method='POST')
         assert data == b('2')
-        _, data = self.api_request('/LPOP/', method='POST', data={'name': 'a'})
+        _, data = self.api_request('/LPOP/a/', method='POST')
         assert data == b('3')
-        _, data = self.api_request('/LPOP/', method='POST', data={'name': 'a'})
+        _, data = self.api_request('/LPOP/a/', method='POST')
         assert data is None
 
     def test_lpush(self):
-        _, data = self.api_request('/LPUSH/', method='POST', data={'name': 'a', 'values': ['1']})
+        _, data = self.api_request('/LPUSH/a/', method='POST', data={'values': ['1']})
         assert data == 1
-        _, data = self.api_request('/LPUSH/', method='POST', data={'name': 'a', 'values': ['2']})
+        _, data = self.api_request('/LPUSH/a/', method='POST', data={'values': ['2']})
         assert data == 2
-        _, data = self.api_request('/LPUSH/', method='POST', data={'name': 'a', 'values': ['3', '4']})
+        _, data = self.api_request('/LPUSH/a/', method='POST', data={'values': ['3', '4']})
         assert data == 4
         _, data = self.api_request('/LRANGE/a/0/-1/')
         assert data == [b('4'), b('3'), b('2'), b('1')]
 
     def test_lpushx(self):
-        _, data = self.api_request('/LPUSHX/', method='POST', data={'name': 'a', 'value': '1'})
+        _, data = self.api_request('/LPUSHX/a/', method='POST', data={'value': '1'})
         assert data == 0
         _, data = self.api_request('/LRANGE/a/0/-1/')
         assert data == []
-        self.api_request('/RPUSH/', method='POST', data={'name': 'a', 'values': ['1', '2', '3']})
-        _, data = self.api_request('/LPUSHX/', method='POST', data={'name': 'a', 'value': '4'})
+        self.api_request('/RPUSH/a/', method='POST', data={'values': ['1', '2', '3']})
+        _, data = self.api_request('/LPUSHX/a/', method='POST', data={'value': '4'})
         assert data == 4
         _, data = self.api_request('/LRANGE/a/0/-1/')
         assert data == [b('4'), b('1'), b('2'), b('3')]
 
     def test_lrange(self):
-        self.api_request('/RPUSH/', method='POST', data={'name': 'a', 'values': ['1', '2', '3', '4', '5']})
+        self.api_request('/RPUSH/a/', method='POST', data={'values': ['1', '2', '3', '4', '5']})
         _, data = self.api_request('/LRANGE/a/0/2/')
         assert data == [b('1'), b('2'), b('3')]
         _, data = self.api_request('/LRANGE/a/2/10/')
@@ -658,7 +658,7 @@ class TestRedisCommands(unittest.TestCase):
         assert data == [b('1'), b('2'), b('3'), b('4'), b('5')]
 
     def test_lrem(self):
-        self.api_request('/RPUSH/', method='POST', data={'name': 'a', 'values': ['1', '1', '1', '1']})
+        self.api_request('/RPUSH/a/', method='POST', data={'values': ['1', '1', '1', '1']})
         _, data = self.api_request('/LREM/a/1/1/', method='DELETE')
         assert data == 1
         _, data = self.api_request('/LRANGE/a/0/-1/')
@@ -669,42 +669,41 @@ class TestRedisCommands(unittest.TestCase):
         assert data == []
 
     def test_lset(self):
-        self.api_request('/RPUSH/', method='POST', data={'name': 'a', 'values': ['1', '2', '3']})
+        self.api_request('/RPUSH/a/', method='POST', data={'values': ['1', '2', '3']})
         assert self.arg('/LRANGE/a/0/-1/') == [b('1'), b('2'), b('3')]
-        assert self.arp('/LSET/', data={'name': 'a', 'index': 1, 'value': '4'})
+        assert self.arp('/LSET/a/', data={'index': 1, 'value': '4'})
         assert self.arg('/LRANGE/a/0/2/') == [b('1'), b('4'), b('3')]
 
     def test_ltrim(self):
-        self.arp('/RPUSH/', data={'name': 'a', 'values': ['1', '2', '3']})
+        self.arp('/RPUSH/a/', data={'values': ['1', '2', '3']})
         assert self.ard('/LTRIM/a/0/1/')
         assert self.arg('/LRANGE/a/0/-1/') == [b('1'), b('2')]
 
     def test_rpop(self):
-        self.arp('/RPUSH/', data={'name': 'a', 'values': ['1', '2', '3']})
-        assert self.arp('/RPOP/', data={'name': 'a'}) == b('3')
-        assert self.arp('/RPOP/', data={'name': 'a'}) == b('2')
-        assert self.arp('/RPOP/', data={'name': 'a'}) == b('1')
-        assert self.arp('/RPOP/', data={'name': 'a'}) is None
+        self.arp('/RPUSH/a/', data={'values': ['1', '2', '3']})
+        assert self.arp('/RPOP/a/') == b('3')
+        assert self.arp('/RPOP/a/') == b('2')
+        assert self.arp('/RPOP/a/') == b('1')
+        assert self.arp('/RPOP/a/') is None
 
     def test_rpoplpush(self):
-        self.arp('/RPUSH/', data={'name': 'a', 'values': ['a1', 'a2', 'a3']})
-        self.arp('/RPUSH/', data={'name': 'b', 'values': ['b1', 'b2', 'b3']})
+        self.arp('/RPUSH/a/', data={'values': ['a1', 'a2', 'a3']})
+        self.arp('/RPUSH/b/', data={'values': ['b1', 'b2', 'b3']})
         assert self.arp('/RPOPLPUSH/', data={'src': 'a', 'dst': 'b'}) == b('a3')
         assert self.arg('/LRANGE/a/0/-1/') == [b('a1'), b('a2')]
         assert self.arg('/LRANGE/b/0/-1/') == [b('a3'), b('b1'), b('b2'), b('b3')]
 
-
     def test_rpush(self):
-        assert self.arp('/RPUSH/', data={'name': 'a', 'values': ['1']}) == 1
-        assert self.arp('/RPUSH/', data={'name': 'a', 'values': ['2']}) == 2
-        assert self.arp('/RPUSH/', data={'name': 'a', 'values': ['3', '4']}) == 4
+        assert self.arp('/RPUSH/a/', data={'values': ['1']}) == 1
+        assert self.arp('/RPUSH/a/', data={'values': ['2']}) == 2
+        assert self.arp('/RPUSH/a/', data={'values': ['3', '4']}) == 4
         assert self.arg('/LRANGE/a/0/-1/') == [b('1'), b('2'), b('3'), b('4')]
 
     def test_rpushx(self):
-        assert self.arp('/RPUSHX/', data={'name': 'a', 'value': 'b'}) == 0
+        assert self.arp('/RPUSHX/a/', data={'value': 'b'}) == 0
         assert self.arg('/LRANGE/a/0/-1/') == []
-        self.arp('/RPUSH/', data={'name': 'a', 'values': ['1', '2', '3']})
-        assert self.arp('/RPUSHX/', data={'name': 'a', 'value': '4'}) == 4
+        self.arp('/RPUSH/a/', data={'values': ['1', '2', '3']})
+        assert self.arp('/RPUSHX/a/', data={'value': '4'}) == 4
         assert self.arg('/LRANGE/a/0/-1/') == [b('1'), b('2'), b('3'), b('4')]
 
     ### SCAN COMMANDS ###
@@ -719,7 +718,7 @@ class TestRedisCommands(unittest.TestCase):
         assert set(keys) == set([b('a')])
 
     def test_sscan(self):
-        self.arp('/SADD/', data={'name': 'a', 'values': [1, 2, 3]})
+        self.arp('/SADD/a/', data={'values': [1, 2, 3]})
         cursor, members = self.arg('/SSCAN/a/')
         assert cursor == b('0')
         assert set(members) == set([b('1'), b('2'), b('3')])
@@ -745,97 +744,97 @@ class TestRedisCommands(unittest.TestCase):
     ### SET COMMANDS ###
     def test_sadd(self):
         members = [b('1'), b('2'), b('3')]
-        self.arp('/SADD/', data={'name': 'a', 'values': members})
+        self.arp('/SADD/a/', data={'values': members})
         assert set(self.arg('/SMEMBERS/a/')) == set(members)
 
     def test_scard(self):
-        self.arp('/SADD/', data={'name': 'a', 'values': [b('1'), b('2'), b('3')]})
+        self.arp('/SADD/a/', data={'values': [b('1'), b('2'), b('3')]})
         assert self.arg('/SCARD/a/') == 3
 
     def test_sdiff(self):
-        self.arp('/SADD/', data={'name': 'a', 'values': ['1', '2', '3']})
+        self.arp('/SADD/a/', data={'values': ['1', '2', '3']})
         params = [('key', 'a'), ('key', 'b')]
         assert set(self.arg('/SDIFF/', params=params)) == set([b('1'), b('2'), b('3')])
-        self.arp('/SADD/', data={'name': 'b', 'values': ['2', '3']})
+        self.arp('/SADD/b/', data={'values': ['2', '3']})
         assert set(self.arg('/SDIFF/', params=params)) == set([b('1')])
 
     def test_sdiffstore(self):
         members = ['1', '2', '3']
-        self.arp('/SADD/', {'name': 'a', 'values': members})
+        self.arp('/SADD/a/', {'values': members})
         assert self.arp('/SDIFFSTORE/', {'dest': 'c', 'keys': ['a', 'b']}) == 3
         assert set(self.arg('/SMEMBERS/c/')) == set(members)
-        self.arp('/SADD/', {'name': 'b', 'values': ['2', '3']})
+        self.arp('/SADD/b/', {'values': ['2', '3']})
         assert self.arp('/SDIFFSTORE/', {'dest': 'c', 'keys': ['a', 'b']}) == 1
         assert set(self.arg('/SMEMBERS/c/')) == set([b('1')])
 
     def test_sinter(self):
-        self.arp('/SADD/', data={'name': 'a', 'values': ['1', '2', '3']})
+        self.arp('/SADD/a/', data={'values': ['1', '2', '3']})
         params = [('key', 'a'), ('key', 'b')]
         assert set(self.arg('/SINTER/', params=params)) == set([])
-        self.arp('/SADD/', data={'name': 'b', 'values': ['2', '3']})
+        self.arp('/SADD/b/', data={'values': ['2', '3']})
         assert set(self.arg('/SINTER/', params=params)) == set([b('2'), b('3')])
 
     def test_sinterstore(self):
         members = ['1', '2', '3']
-        self.arp('/SADD/', {'name': 'a', 'values': members})
+        self.arp('/SADD/a/', {'values': members})
         assert self.arp('/SINTERSTORE/', {'dest': 'c', 'keys': ['a', 'b']}) == 0
         assert set(self.arg('/SMEMBERS/c/')) == set()
-        self.arp('/SADD/', {'name': 'b', 'values': ['2', '3']})
+        self.arp('/SADD/b/', {'values': ['2', '3']})
         assert self.arp('/SINTERSTORE/', {'dest': 'c', 'keys': ['a', 'b']}) == 2
         assert set(self.arg('/SMEMBERS/c/')) == set([b('2'), b('3')])
 
     def test_sismember(self):
-        self.arp('/SADD/', {'name': 'a', 'values': ['1', '2', '3']})
+        self.arp('/SADD/a/', {'values': ['1', '2', '3']})
         assert self.arg('/SISMEMBER/a/1/')
         assert self.arg('/SISMEMBER/a/2/')
         assert self.arg('/SISMEMBER/a/3/')
         assert not self.arg('/SISMEMBER/a/4/')
 
     def test_smembers(self):
-        self.arp('/SADD/', {'name': 'a', 'values': ['1', '2', '3']})
+        self.arp('/SADD/a/', {'values': ['1', '2', '3']})
         assert set(self.arg('/SMEMBERS/a/')) == set([b('1'), b('2'), b('3')])
 
     def test_smove(self):
-        self.arp('/SADD/', {'name': 'a', 'values': ['a1', 'a2']})
-        self.arp('/SADD/', {'name': 'b', 'values': ['b1', 'b2']})
+        self.arp('/SADD/a/', {'values': ['a1', 'a2']})
+        self.arp('/SADD/b/', {'values': ['b1', 'b2']})
         assert self.arp('/SMOVE/', {'src': 'a', 'dst': 'b', 'value': 'a1'})
         assert set(self.arg('/SMEMBERS/a/')) == set([b('a2')])
         assert set(self.arg('/SMEMBERS/b/')) == set([b('b1'), b('b2'), b('a1')])
 
     def test_spop(self):
         s = [b('1'), b('2'), b('3')]
-        self.arp('/SADD/', {'name': 'a', 'values': s})
-        value = self.arp('/SPOP/', {'name': 'a'})
+        self.arp('/SADD/a/', {'values': s})
+        value = self.arp('/SPOP/a/')
         assert value in s
         assert set(self.arg('/SMEMBERS/a/')) == set(s) - set([value])
 
     def test_srandmember(self):
         s = [b('1'), b('2'), b('3')]
-        self.arp('/SADD/', {'name': 'a', 'values': s})
+        self.arp('/SADD/a/', {'values': s})
         assert self.arg('/SRANDMEMBER/a/') in s
 
     def test_srandmember_multi_value(self):
         s = [b('1'), b('2'), b('3')]
-        self.arp('/SADD/', {'name': 'a', 'values': s})
+        self.arp('/SADD/a/', {'values': s})
         randoms = self.arg('/SRANDMEMBER/a/2/')
         assert len(randoms) == 2
         assert set(randoms).intersection(s) == set(randoms)
 
     def test_srem(self):
         s = ['1', '2', '3', '4']
-        self.arp('/SADD/', {'name': 'a', 'values': s})
+        self.arp('/SADD/a/', {'values': s})
         assert self.ard('/SREM/a/', params=[('value', '5')]) == 0
         assert self.ard('/SREM/a/', params=[('value', '2'), ('value', '4')]) == 2
         assert set(self.arg('/SMEMBERS/a/')) == set([b('1'), b('3')])
 
     def test_sunion(self):
-        self.arp('/SADD/', {'name': 'a', 'values': ['1', '2']})
-        self.arp('/SADD/', {'name': 'b', 'values': ['2', '3']})
+        self.arp('/SADD/a/', {'values': ['1', '2']})
+        self.arp('/SADD/b/', {'values': ['2', '3']})
         assert set(self.arg('/SUNION/', params=[('key', 'a'), ('key', 'b')])) == set([b('1'), b('2'), b('3')])
 
     def test_sunionstore(self):
-        self.arp('/SADD/', {'name': 'a', 'values': ['1', '2']})
-        self.arp('/SADD/', {'name': 'b', 'values': ['2', '3']})
+        self.arp('/SADD/a/', {'values': ['1', '2']})
+        self.arp('/SADD/b/', {'values': ['2', '3']})
         assert self.arp('/SUNIONSTORE/', {'dest': 'c', 'keys': ['a', 'b']}) == 3
         assert set(self.arg('/SMEMBERS/c/')) == set([b('1'), b('2'), b('3')])
 
@@ -857,8 +856,8 @@ class TestRedisCommands(unittest.TestCase):
     def test_zincrby(self):
         self.arp('/ZADD/a/', {'scores': [('a1', 1), ('a2', 2), ('a3', 3)]})
 
-        assert self.arp('/ZINCRBY/', {'name': 'a', 'value': 'a2'}) == 3.0
-        assert self.arp('/ZINCRBY/', {'name': 'a', 'value': 'a3', 'amount': 5}) == 8.0
+        assert self.arp('/ZINCRBY/a/', {'value': 'a2'}) == 3.0
+        assert self.arp('/ZINCRBY/a/', {'value': 'a3', 'amount': 5}) == 8.0
         assert self.arg('/ZSCORE/a/a2/') == 3.0
         assert self.arg('/ZSCORE/a/a3/') == 8.0
 
@@ -1031,11 +1030,11 @@ class TestRedisCommands(unittest.TestCase):
         assert self.arg('/HGET/a/3/') == b('3')
 
         # field was updated redis returns 0
-        assert self.arp('/HSET/a/', {'key': '2', 'value': '5'}) == 0
+        assert self.arp('/HSET/a/2/', {'value': '5'}) == 0
         assert self.arg('/HGET/a/2/') == b('5')
 
         # field is new redis returns 1
-        assert self.arp('/HSET/a/', {'key': '4', 'value': '4'}) == 1
+        assert self.arp('/HSET/a/4/', {'value': '4'}) == 1
         assert self.arg('/HGET/a/4/') == b('4')
 
         # key inside of hash that doesn't exist returns null value
@@ -1059,14 +1058,14 @@ class TestRedisCommands(unittest.TestCase):
         assert self.arg('/HGETALL/a/') == h
 
     def test_hincrby(self):
-        assert self.arp('/HINCRBY/', {'name': 'a', 'key': '1'}) == 1
-        assert self.arp('/HINCRBY/', {'name': 'a', 'key': '1', 'amount': 2}) == 3
-        assert self.arp('/HINCRBY/', {'name': 'a', 'key': '1', 'amount': -2}) == 1
+        assert self.arp('/HINCRBY/a/1/') == 1
+        assert self.arp('/HINCRBY/a/1/', {'amount': 2}) == 3
+        assert self.arp('/HINCRBY/a/1/', {'amount': -2}) == 1
 
     def test_hincrbyfloat(self):
-        assert self.arp('/HINCRBYFLOAT/', {'name': 'a', 'key': '1'}) == 1.0
-        assert self.arp('/HINCRBYFLOAT/', {'name': 'a', 'key': '1'}) == 2.0
-        assert self.arp('/HINCRBYFLOAT/', {'name': 'a', 'key': '1', 'amount': 1.2}) == 3.2
+        assert self.arp('/HINCRBYFLOAT/a/1/') == 1.0
+        assert self.arp('/HINCRBYFLOAT/a/1/',) == 2.0
+        assert self.arp('/HINCRBYFLOAT/a/1/', {'amount': 1.2}) == 3.2
 
     def test_hkeys(self):
         h = {b('a1'): b('1'), b('a2'): b('2'), b('a3'): b('3')}
@@ -1104,32 +1103,32 @@ class TestRedisCommands(unittest.TestCase):
 
     ### SORT ###
     def test_sort_basic(self):
-        self.arp('/RPUSH/', {'name': 'a', 'values': ['3', '2', '1', '4']})
+        self.arp('/RPUSH/a/', {'values': ['3', '2', '1', '4']})
         assert self.arg('/SORT/a/') == [b('1'), b('2'), b('3'), b('4')]
 
     def test_sort_limited(self):
-        self.arp('/RPUSH/', {'name': 'a', 'values': ['3', '2', '1', '4']})
+        self.arp('/RPUSH/a/', {'values': ['3', '2', '1', '4']})
         assert self.arg('/SORT/a/', params=[('start', 1), ('num', 2)]) == [b('2'), b('3')]
 
     def test_sort_by(self):
         self.arp('/SET/score:1/', {'value': '8'})
         self.arp('/SET/score:2/', {'value': '3'})
         self.arp('/SET/score:3/', {'value': '5'})
-        self.arp('/RPUSH/', {'name': 'a', 'values': ['3', '2', '1']})
+        self.arp('/RPUSH/a/', {'values': ['3', '2', '1']})
         assert self.arg('/SORT/a/', params=[('by', 'score:*')]) == [b('2'), b('3'), b('1')]
 
     def test_sort_get(self):
         self.arp('/SET/user:1/', {'value': 'u1'})
         self.arp('/SET/user:2/', {'value': 'u2'})
         self.arp('/SET/user:3/', {'value': 'u3'})
-        self.arp('/RPUSH/', {'name': 'a', 'values': ['2', '3', '1']})
+        self.arp('/RPUSH/a/', {'values': ['2', '3', '1']})
         assert self.arg('/SORT/a/', params=[('get', 'user:*')]) == [b('u1'), b('u2'), b('u3')]
 
     def test_sort_get_multi(self):
         self.arp('/SET/user:1/', {'value': 'u1'})
         self.arp('/SET/user:2/', {'value': 'u2'})
         self.arp('/SET/user:3/', {'value': 'u3'})
-        self.arp('/RPUSH/', {'name': 'a', 'values': ['2', '3', '1']})
+        self.arp('/RPUSH/a/', {'values': ['2', '3', '1']})
         assert self.arg('/SORT/a/', params=[('get', 'user:*'), ('get', '#')]) == \
             [b('u1'), b('1'), b('u2'), b('2'), b('u3'), b('3')]
 
@@ -1137,29 +1136,29 @@ class TestRedisCommands(unittest.TestCase):
         self.arp('/SET/user:1/', {'value': 'u1'})
         self.arp('/SET/user:2/', {'value': 'u2'})
         self.arp('/SET/user:3/', {'value': 'u3'})
-        self.arp('/RPUSH/', {'name': 'a', 'values': ['2', '3', '1']})
+        self.arp('/RPUSH/a/', {'values': ['2', '3', '1']})
         assert self.arg('/SORT/a/', params=[('get', 'user:*'), ('get', '#'), ('groups', 1)]) == \
-            [[b('u1'), b('1')], [b('u2'), b('2')], [b('u3'), b('3')]]            
+            [[b('u1'), b('1')], [b('u2'), b('2')], [b('u3'), b('3')]]
 
     def test_sort_groups_string_get(self):
         self.arp('/SET/user:1/', {'value': 'u1'})
         self.arp('/SET/user:2/', {'value': 'u2'})
         self.arp('/SET/user:3/', {'value': 'u3'})
-        self.arp('/RPUSH/', {'name': 'a', 'values': ['2', '3', '1']})
+        self.arp('/RPUSH/a/', {'values': ['2', '3', '1']})
         self.arg('/SORT/a/', params=[('get', 'user:*'), ('groups', 1)], assert_status_code=400,
                  error_string='when using "groups" the "get" argument must be specified and contain at least two keys')
 
     def test_sort_desc(self):
-        self.arp('/RPUSH/', {'name': 'a', 'values': ['2', '3', '1']})
+        self.arp('/RPUSH/a/', {'values': ['2', '3', '1']})
         assert self.arg('/SORT/a/', params=[('desc', 1)]) == [b('3'), b('2'), b('1')]
 
     def test_sort_alpha(self):
-        self.arp('/RPUSH/', {'name': 'a', 'values': ['e', 'c', 'b', 'd', 'a']})
+        self.arp('/RPUSH/a/', {'values': ['e', 'c', 'b', 'd', 'a']})
         assert self.arg('/SORT/a/', params=[('alpha', 1)]) == \
             [b('a'), b('b'), b('c'), b('d'), b('e')]
 
     def test_sort_store(self):
-        self.arp('/RPUSH/', {'name': 'a', 'values': ['2', '3', '1']})
+        self.arp('/RPUSH/a/', {'values': ['2', '3', '1']})
         assert self.arg('/SORT/a/', params=[('store', 'sorted_values')]) == 3
         assert self.arg('/LRANGE/sorted_values/0/-1/') == [b('1'), b('2'), b('3')]
 

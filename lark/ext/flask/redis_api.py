@@ -128,7 +128,7 @@ build_api_func('/CLIENT/SETNAME/', methods=['POST'], redispy_method='client_setn
 
 build_api_func(['/CONFIG/GET/<pattern>', '/CONFIG/GET/'], redispy_method='config_get')
 
-build_api_func('/CONFIG/SET/', methods=['POST'], redispy_method='config_set')
+build_api_func('/CONFIG/SET/<name>/', methods=['POST'], redispy_method='config_set')
 
 build_api_func('/CONFIG/RESETSTAT/', methods=['POST'], redispy_method='config_resetstat')
 
@@ -162,13 +162,13 @@ build_api_func('/SET/<key>/', methods=['POST'])
 
 build_api_func('/APPEND/<key>/', methods=['POST'])
 
-build_api_func('/SETBIT/', methods=['POST'])
+build_api_func('/SETBIT/<name>/', methods=['POST'])
 
 build_api_func(['/BITCOUNT/<key>/<start>/<end>/', '/BITCOUNT/<key>/'])
 
 build_api_func('/BITOP/', methods=['POST'])
 
-build_api_func(['/DECR/', '/DECRBY/'], methods=['POST'], redispy_method='decr')
+build_api_func(['/DECR/<name>/', '/DECRBY/<name>/'], methods=['POST'], redispy_method='decr')
 
 build_api_func(['/DEL/<name>/', '/DEL/'], methods=['DELETE'], redispy_method='delete')
 
@@ -178,27 +178,27 @@ build_api_func('/RESTORE/', methods=['POST'])
 
 build_api_func('/EXISTS/<key>/')
 
-build_api_func('/EXPIRE/', methods=['POST'])
+build_api_func('/EXPIRE/<name>/', methods=['POST'])
 
-build_api_func('/EXPIREAT/', methods=['POST'])
+build_api_func('/EXPIREAT/<name>/', methods=['POST'])
 
 build_api_func('/TTL/<name>/')
 
-build_api_func('/PEXPIRE/' ,methods=['POST'])
+build_api_func('/PEXPIRE/<name>/', methods=['POST'])
 
-build_api_func('/PEXPIREAT/', methods=['POST'])
+build_api_func('/PEXPIREAT/<name>/', methods=['POST'])
 
 build_api_func('/PTTL/<name>/')
 
-build_api_func('/PSETEX/', methods=['POST'])
+build_api_func('/PSETEX/<name>/', methods=['POST'])
 
-build_api_func('/PERSIST/', methods=['POST'])
+build_api_func('/PERSIST/<name>/', methods=['POST'])
 
 build_api_func('/GETBIT/<name>/<offset>/')
 
 build_api_func('/GETRANGE/<key>/<start>/<end>/')
 
-build_api_func('/GETSET/', methods=['POST'])
+build_api_func('/GETSET/<name>/', methods=['POST'])
 
 build_api_func(['/INCR/<name>/', '/INCRBY/<name>/'], methods=['POST'], redispy_method='incr')
 
@@ -218,11 +218,11 @@ build_api_func('/RENAME/', methods=['POST'])
 
 build_api_func('/RENAMENX/', methods=['POST'])
 
-build_api_func('/SETEX/', methods=['POST'])
+build_api_func('/SETEX/<name>/', methods=['POST'])
 
-build_api_func('/SETNX/', methods=['POST'])
+build_api_func('/SETNX/<name>/', methods=['POST'])
 
-build_api_func('/SETRANGE/', methods=['POST'])
+build_api_func('/SETRANGE/<name>/', methods=['POST'])
 
 build_api_func('/STRLEN/<name>/')
 
@@ -238,31 +238,31 @@ build_api_func('/BRPOPLPUSH/', methods=['POST'])
 
 build_api_func('/LINDEX/<name>/<index>/')
 
-build_api_func('/LINSERT/', methods=['POST'])
+build_api_func('/LINSERT/<name>/', methods=['POST'])
 
 build_api_func('/LLEN/<name>/')
 
-build_api_func('/LPOP/', methods=['POST'])
+build_api_func('/LPOP/<name>/', methods=['POST'])
 
-build_api_func('/LPUSH/', methods=['POST'])
+build_api_func('/LPUSH/<name>/', methods=['POST'])
 
-build_api_func('/LPUSHX/', methods=['POST'])
+build_api_func('/LPUSHX/<name>/', methods=['POST'])
 
 build_api_func('/LRANGE/<name>/<start>/<end>/', )
 
 build_api_func(['/LREM/<name>/<value>/<num>/', '/LREM/<name>/<value>/'], methods=['DELETE'])
 
-build_api_func('/LSET/', methods=['POST'])
+build_api_func('/LSET/<name>/', methods=['POST'])
 
 build_api_func('/LTRIM/<name>/<start>/<end>/', methods=['DELETE'])
 
-build_api_func('/RPOP/', methods=['POST'])
+build_api_func('/RPOP/<name>/', methods=['POST'])
 
 build_api_func('/RPOPLPUSH/', methods=['POST'])
 
-build_api_func('/RPUSH/', methods=['POST'])
+build_api_func('/RPUSH/<name>/', methods=['POST'])
 
-build_api_func('/RPUSHX/', methods=['POST'])
+build_api_func('/RPUSHX/<name>/', methods=['POST'])
 
 build_api_func('/SORT/<name>/')
 
@@ -274,7 +274,7 @@ build_api_func('/HSCAN/<name>/')
 
 build_api_func('/ZSCAN/<name>/')
 
-build_api_func('/SADD/', methods=['POST'])
+build_api_func('/SADD/<name>/', methods=['POST'])
 
 build_api_func('/SMEMBERS/<name>/')
 
@@ -292,7 +292,7 @@ build_api_func('/SISMEMBER/<name>/<value>/')
 
 build_api_func('/SMOVE/', methods=['POST'])
 
-build_api_func('/SPOP/', methods=['POST'])
+build_api_func('/SPOP/<name>/', methods=['POST'])
 
 build_api_func(['/SRANDMEMBER/<name>/<number>/', '/SRANDMEMBER/<name>/'])
 
@@ -308,7 +308,7 @@ build_api_func('/ZCARD/<name>/')
 
 build_api_func('/ZCOUNT/<name>/<min>/<max>/')
 
-build_api_func('/ZINCRBY/', methods=['POST'])
+build_api_func('/ZINCRBY/<name>/', methods=['POST'])
 
 build_api_func('/ZINTERSTORE/', methods=['POST'])
 
@@ -342,15 +342,15 @@ build_api_func('/HEXISTS/<name>/<key>/')
 
 build_api_func('/HDEL/<name>/', methods=['DELETE'])
 
-build_api_func('/HINCRBY/', methods=['POST'])
+build_api_func('/HINCRBY/<name>/<key>/', methods=['POST'])
 
-build_api_func('/HINCRBYFLOAT/', methods=['POST'])
+build_api_func('/HINCRBYFLOAT/<name>/<key>/', methods=['POST'])
 
 build_api_func('/HKEYS/<name>/')
 
 build_api_func('/HLEN/<name>/')
 
-build_api_func('/HSET/<name>/', methods=['POST'])
+build_api_func('/HSET/<name>/<key>/', methods=['POST'])
 
 build_api_func('/HSETNX/<name>/', methods=['POST'])
 
