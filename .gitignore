@@ -1,2 +1,3 @@
 *.pyc
 venv
+docs/_build
