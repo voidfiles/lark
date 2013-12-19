@@ -64,7 +64,7 @@ class SchemaAdapterMixin(object):
 
     def signature_from_cstruct(self, cstruct, redis_args, redis_kwargs):
         args = [cstruct[arg] for arg in redis_args]
-        kwargs = {arg: cstruct.get(arg) for arg in redis_kwargs}
+        kwargs = dict((arg, cstruct.get(arg)) for arg in redis_kwargs)
         return (args, kwargs)
 
 
