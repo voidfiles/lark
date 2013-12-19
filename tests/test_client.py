@@ -2,6 +2,7 @@ from __future__ import with_statement
 import binascii
 import datetime
 import json
+import pprint
 import time
 import unittest
 from urllib import urlencode
@@ -10,7 +11,7 @@ from flask import Flask
 from iso8601 import parse_date
 from redis._compat import b
 
-from lark.ext.flask.redis_api import redis_api_blueprint 
+from lark.ext.flask.redis_api import redis_api_blueprint
 from lark.ext.flask.flask_redis import Redis
 
 app = Flask(__name__)
@@ -38,8 +39,8 @@ class TestRedisCommands(unittest.TestCase):
             query_string = urlencode(params)
 
         resp = self.app.open('/api/0%s' % path, method=method, query_string=query_string, data=data,
-                                headers=headers, content_type='application/json')
-        print resp.data
+                             headers=headers, content_type='application/json')
+
         if assert_status_code:
             self.assertEquals(assert_status_code, resp.status_code)
 

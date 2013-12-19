@@ -22,7 +22,7 @@ class RedisApiClient(object):
 
         # Check that method exisits
         try:
-            redis_method_def = getattr(redis_api_client, redis_method)()
+            redis_method_def = getattr(redis_api_client, redis_method)
         except AttributeError:
             raise RedisApiClientException('%s is not a redis method' % redis_method)
 
@@ -94,14 +94,19 @@ def bind_api_method(method, inbound=DEFAULT_INBOUND_SCHEMA, outbound=DEFAULT_OUT
     def run(self, *args, **kwargs):
         return redis_method_def
 
+    ctx = {
+        'cmd': method,
+        'scopes': ', '.join(map(lambda x: '**%s**' % x, list(redis_method_def.scopes))),
+    }
     doc = """
-    **Redispy method**: `%s`
+    `redis docs <http://redis.io/commands/%(cmd)s>`_
 
-    Requires one of these scopes (%s)
-    """ % (method, ', '.join(list(redis_method_def.scopes)))
+    Requires one of these scopes: %(scopes)s
+
+    """ % ctx
 
     run.__doc__ = doc
-
+    run = property(run)
     setattr(RedisApiClient, method, run)
 
 

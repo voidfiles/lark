@@ -53,11 +53,11 @@ class SchemaAdapterMixin(object):
             if query_dict.getlist(name):
                 cstruct[name] = query_dict.getlist(name)
 
-        print "Going to deserialize: %s" % (cstruct)
+        # print "Going to deserialize: %s" % (cstruct)
         schema_instance = self.clone()
         schema_instance.redis_prefix = key_prefix
         data = schema_instance.deserialize(cstruct)
-        print "deserialized data: %s redis_args: %s redis_kwargs: %s" % (data, redis_args, redis_kwargs)
+        # print "deserialized data: %s redis_args: %s redis_kwargs: %s" % (data, redis_args, redis_kwargs)
         args, kwargs = schema_instance.signature_from_cstruct(data, redis_args, redis_kwargs)
 
         return (args, kwargs)
@@ -292,7 +292,7 @@ class NameValueListSchemaNode(LarkSchemaNode):
         cstruct = {
             'value': request_json
         }
-        print "Going to deserialize: %s" % (cstruct)
+        # print "Going to deserialize: %s" % (cstruct)
         self.redis_prefix = redis_prefix
         data = self.deserialize(cstruct)
         args, kwargs = self.signature_from_cstruct(data)
@@ -775,7 +775,7 @@ class ZrangeByScoresSchemaNode(LarkSchemaNode):
         num = cstruct.get('num')
         withscores = cstruct.get('withscores')
         score_cast_func = valid_cast_funcs.get(cstruct.get('score_cast_func'))
-        print 'Sendcing up score_cast_func: %s %s' % (score_cast_func, type(score_cast_func))
+        # print 'Sendcing up score_cast_func: %s %s' % (score_cast_func, type(score_cast_func))
         return ([name, min, max], {
             'start': start,
             'num': num,
