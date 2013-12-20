@@ -3,12 +3,14 @@ import binascii
 import datetime
 import json
 import pprint
+import os
 import time
 import unittest
 from urllib import urlencode
 
 from flask import Flask
 from iso8601 import parse_date
+import redis
 from redis._compat import b
 
 from lark.ext.flask.redis_api import redis_api_blueprint
@@ -22,63 +24,9 @@ Redis(app)
 app.register_blueprint(redis_api_blueprint, url_prefix='/api/0')
 
 
-class TestRedisCommands(unittest.TestCase):
-
-    def setUp(self):
-        self.app_ref = app
-        self.app = app.test_client()
-
-    def tearDown(self):
-        self.api_request('/FLUSHDB/', method='DELETE')
-
-    def api_request(self, path, method='GET', params=None, data=None, headers=None, assert_status_code=200, error_string=None, content_type='application/json'):
-        data = json.dumps(data) if data else None
-
-        query_string = None
-        if params:
-            query_string = urlencode(params)
-
-        resp = self.app.open('/api/0%s' % path, method=method, query_string=query_string, data=data,
-                             headers=headers, content_type='application/json')
-
-        if assert_status_code:
-            self.assertEquals(assert_status_code, resp.status_code)
-
-        resp = json.loads(resp.data)
-        if error_string:
-            self.assertEquals(resp['meta']['error_message'], error_string)
-
-        return (resp.get('meta'), resp.get('data'))
-
-    def arp(self, path, data=None):
-        _, data = self.api_request(path, method='POST', data=data)
-        return data
-
-    def ard(self, path, params=None):
-        _, data = self.api_request(path, method='DELETE', params=params)
-        return data
-
-    def arg(self, path, params=None, assert_status_code=200, error_string=None):
-        _, data = self.api_request(path, params=params, assert_status_code=assert_status_code, error_string=error_string, content_type=None)
-        return data
+class RedisCommands(object):
 
     ### SERVER INFORMATION ###
-    def test_scope_getter(self):
-        DEFAULT_LARK_SCOPES = self.app_ref.config['DEFAULT_LARK_SCOPES']
-        self.app_ref.config['DEFAULT_LARK_SCOPES'] = None
-
-        def scope_getter(*args, **kwargs):
-            return set(['admin'])
-
-        self.app_ref.config['LARK_SCOPE_GETTER'] = scope_getter
-
-        meta, data = self.api_request('/CLIENT/LIST/')
-        assert isinstance(data[0], dict)
-        assert 'addr' in data[0]
-
-        self.app_ref.config['DEFAULT_LARK_SCOPES'] = DEFAULT_LARK_SCOPES
-        self.app_ref.config['LARK_SCOPE_GETTER'] = None
-
     def test_client_list(self):
         meta, data = self.api_request('/CLIENT/LIST/')
         assert isinstance(data[0], dict)
@@ -95,8 +43,7 @@ class TestRedisCommands(unittest.TestCase):
         assert int(info['total_commands_processed']) > 1
         meta, data = self.api_request('/CONFIG/RESETSTAT/', method='POST')
         meta, info = self.api_request('/INFO/')
-        # There is an implicit select when you connect to db 10
-        assert int(info['total_commands_processed']) == 2
+        assert int(info['total_commands_processed']) == 1
 
     def test_config_set(self):
         meta, data = self.api_request('/CONFIG/GET/')
@@ -1282,3 +1229,154 @@ class TestRedisCommands(unittest.TestCase):
 #         timestamp = 1349673917.939762
 #         r.zadd('a', 'a1', timestamp)
 #         assert r.zscore('a', 'a1') == timestamp
+
+
+class TestFlaskRedisCommands(RedisCommands, unittest.TestCase):
+    def setUp(self):
+        self.app_ref = app
+        self.app = app.test_client()
+
+    def tearDown(self):
+        self.api_request('/FLUSHDB/', method='DELETE')
+
+    def api_request(self, path, method='GET', params=None, data=None, headers=None, assert_status_code=200, error_string=None, content_type='application/json'):
+        data = json.dumps(data) if data else None
+
+        query_string = None
+        if params:
+            query_string = urlencode(params)
+
+        resp = self.app.open('/api/0%s' % path, method=method, query_string=query_string, data=data,
+                             headers=headers, content_type='application/json')
+
+        if assert_status_code:
+            self.assertEquals(assert_status_code, resp.status_code)
+
+        resp = json.loads(resp.data)
+        if error_string:
+            self.assertEquals(resp['meta']['error_message'], error_string)
+
+        return (resp.get('meta'), resp.get('data'))
+
+    def arp(self, path, data=None):
+        _, data = self.api_request(path, method='POST', data=data)
+        return data
+
+    def ard(self, path, params=None):
+        _, data = self.api_request(path, method='DELETE', params=params)
+        return data
+
+    def arg(self, path, params=None, assert_status_code=200, error_string=None):
+        _, data = self.api_request(path, params=params, assert_status_code=assert_status_code, error_string=error_string, content_type=None)
+        return data
+
+    def test_scope_getter(self):
+        DEFAULT_LARK_SCOPES = self.app_ref.config['DEFAULT_LARK_SCOPES']
+        self.app_ref.config['DEFAULT_LARK_SCOPES'] = None
+
+        def scope_getter(*args, **kwargs):
+            return set(['admin'])
+
+        self.app_ref.config['LARK_SCOPE_GETTER'] = scope_getter
+
+        meta, data = self.api_request('/CLIENT/LIST/')
+        assert isinstance(data[0], dict)
+        assert 'addr' in data[0]
+
+        self.app_ref.config['DEFAULT_LARK_SCOPES'] = DEFAULT_LARK_SCOPES
+        self.app_ref.config['LARK_SCOPE_GETTER'] = None
+
+
+from django.conf import settings
+
+DIRNAME = os.path.dirname(__file__)
+
+settings.configure(DEBUG=True,
+                   ROOT_URLCONF='lark.ext.django.urls',
+                   DATABASE_ENGINE='sqlite3',
+                   DATABASE_NAME=os.path.join(DIRNAME, 'database.db'),
+                   INSTALLED_APPS=('django.contrib.auth', 'lark.ext.django'),
+                   REDIS_CONNECTION_METHOD= lambda: redis.Redis.from_url('redis://localhost:6379/10'),
+                   DEFAULT_LARK_SCOPES=set(['admin'])
+                   )
+
+from django.test.utils import setup_test_environment
+setup_test_environment()
+
+
+from django.test.client import Client
+client = Client()
+
+
+class TestDjangoRedisCommands(RedisCommands, unittest.TestCase):
+    def setUp(self):
+        self.client = client
+
+    def tearDown(self):
+        self.api_request('/FLUSHDB/', method='DELETE')
+
+    def api_request(self, path, method='GET', params=None, data=None, assert_status_code=200, error_string=None, content_type='application/json'):
+        data = json.dumps(data) if data else None
+
+        query_string = None
+        if params:
+            query_string = urlencode(params)
+
+        path = '%s' % path
+
+        if query_string:
+            path = path + '?' + query_string
+        kwargs = {}
+        if data:
+            kwargs['data'] = data
+
+        if method == 'POST':
+            requester = self.client.post
+        elif method == 'PATCH':
+            requester = self.client.patch
+        elif method == 'PUT':
+            requester = self.client.put
+        elif method == 'GET':
+            requester = self.client.get
+        elif method == 'DELETE':
+            requester = self.client.delete
+
+        resp = requester(path, content_type=content_type, **kwargs)
+
+        if assert_status_code:
+            self.assertEquals(assert_status_code, resp.status_code)
+
+        resp = json.loads(resp.content)
+        if error_string:
+            self.assertEquals(resp['meta']['error_message'], error_string)
+
+        return (resp.get('meta'), resp.get('data'))
+
+    def arp(self, path, data=None):
+        _, data = self.api_request(path, method='POST', data=data)
+        return data
+
+    def ard(self, path, params=None):
+        _, data = self.api_request(path, method='DELETE', params=params)
+        return data
+
+    def arg(self, path, params=None, assert_status_code=200, error_string=None):
+        _, data = self.api_request(path, params=params, assert_status_code=assert_status_code, error_string=error_string, content_type=None)
+        return data
+
+    def test_scope_getter(self):
+        DEFAULT_LARK_SCOPES = settings.DEFAULT_LARK_SCOPES
+        settings.DEFAULT_LARK_SCOPES = None
+
+        def scope_getter(*args, **kwargs):
+            return set(['admin'])
+
+        settings.DEFAULT_LARK_SCOPES = None
+        settings.LARK_SCOPE_GETTER = scope_getter
+
+        meta, data = self.api_request('/CLIENT/LIST/')
+        assert isinstance(data[0], dict)
+        assert 'addr' in data[0]
+
+        settings.DEFAULT_LARK_SCOPES = DEFAULT_LARK_SCOPES
+        settings.LARK_SCOPE_GETTER = None

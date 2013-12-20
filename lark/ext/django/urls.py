@@ -1,81 +1,7 @@
-import functools
-from redis.exceptions import DataError
-from flask import Blueprint, make_response, g, request, current_app
-from colander import Invalid
-from lark.redis.client import RedisApiClient
-from lark.ext.utils import json_dumps, RedisApiException
+from django.conf.urls import patterns, url
+import re
 
-redis_api_blueprint = Blueprint('redis_api', __name__)
-
-
-def query_redis(redispy_method, *args, **kwargs):
-    status_code = 200
-    try:
-        try:
-            request_json = request.get_json()
-        except:
-            request_json = None
-
-        scopes = None
-        default_scopes = current_app.config.get('DEFAULT_LARK_SCOPES', set())
-        scope_getter = current_app.config.get('LARK_SCOPE_GETTER')
-        if scope_getter:
-            scopes = scope_getter(redispy_method, request_json, request.args, args, kwargs)
-
-        if scopes is None:
-            scopes = default_scopes
-
-        data = RedisApiClient.from_request(redispy_method, g.r, request_json, request.args, args, kwargs, scopes)
-        resp_envelope = {
-            'meta': {
-                'status': 'ok',
-                'status_code': status_code,
-            },
-            'data': data,
-        }
-    except DataError, e:
-        status_code = 400
-        resp_envelope = {
-            'meta': {
-                'status': 'error',
-                'status_code': status_code,
-                'error_message': unicode(e)
-            }
-        }
-    except Invalid, e:
-        status_code = 400
-        resp_envelope = {
-            'meta': {
-                'status': 'error',
-                'status_code': status_code,
-                'error_message': unicode(e)
-            }
-        }
-    except RedisApiException, e:
-        status_code = e.status_code
-        resp_envelope = {
-            'meta': {
-                'status': 'error',
-                'status_code': e.status_code,
-                'error_message': unicode(e)
-            }
-        }
-
-    except Exception, e:
-        raise
-        status_code = 500
-        resp_envelope = {
-            'meta': {
-                'status': 'error',
-                'status_code': 500,
-                'error_message': 'unhandled error'
-            }
-        }
-
-    resp_json = json_dumps.encode(resp_envelope)
-    return make_response(resp_json, status_code, {
-        'Content-Type': 'application/json',
-    })
+urlpatterns = []
 
 
 def build_api_func(routes, methods=['GET'], redispy_method=None):
@@ -85,11 +11,13 @@ def build_api_func(routes, methods=['GET'], redispy_method=None):
     if not redispy_method:
         redispy_method = routes[0][1:].split('/')[0].lower()
 
-    view_func = functools.partial(query_redis, redispy_method)
-
     for route in routes:
-        redis_api_blueprint.add_url_rule(route, methods=methods, view_func=view_func, endpoint=redispy_method)
-        redis_api_blueprint.add_url_rule(route.lower(), methods=methods, view_func=view_func, endpoint=redispy_method)
+        args = re.findall(r'(<\w+>)', route)
+        for arg in args:
+            name = '(?P<%s>[^/]+)' % (arg[1:-1])
+            route = route.replace(arg, name, 1)
+        # print route
+        urlpatterns.append(url(r'(?i)^%s$' % (route[1:]), 'lark.ext.django.views.query_redis', {'redispy_method': redispy_method, 'methods': methods}))
 
 
 build_api_func('/BGREWRITEAOF/')
@@ -337,3 +265,5 @@ build_api_func('/HMSET/<name>/', methods=['POST'])
 build_api_func('/HMGET/<name>/')
 
 build_api_func('/HVALS/<name>/')
+
+urlpatterns = patterns('', *urlpatterns)

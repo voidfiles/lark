@@ -1,6 +1,7 @@
 import redis
 from flask import g
 
+
 class Redis(object):
 
     def __init__(self, app=None):
@@ -19,8 +20,14 @@ class Redis(object):
 
         self.app = app
 
+    _redis_connection = None
+
     def connect(self):
-        return redis.Redis.from_url(self.app.config['REDIS_URL'])
+        if self._redis_connection:
+            return self._redis_connection
+
+        self._redis_connection = redis.Redis.from_url(self.app.config['REDIS_URL'])
+        return self._redis_connection
 
     def before_request(self):
         g.r = self.connect()

@@ -2,18 +2,11 @@ import collections
 import colander
 import json
 
+
 def valid_key(key):
     if key:
         return key
     return False
-
-
-def combine_schemas(*args):
-    schema = OrderedDict()
-    for arg in args:
-        schema.update(arg)
-
-    return schema
 
 
 class SchemaAdapterMixin(object):
@@ -41,7 +34,6 @@ class SchemaAdapterMixin(object):
         for arg in redis_kwargs:
             if query_dict.get(arg):
                 cstruct[arg] = query_dict.get(arg)
-
 
         if kwargs:
             cstruct.update(kwargs)
@@ -124,7 +116,7 @@ class PrefixedRedisReferenceType(RedisReferenceType):
             return cstruct
 
         prefix = getattr(node, 'redis_prefix', None)
-        
+
         if prefix:
             cstruct = u'%s:%s' % (prefix, cstruct)
 
@@ -241,6 +233,7 @@ class LarkMappingSchema(colander.Mapping):
 
         return self._impl(node, cstruct, callback)
 
+
 # Type
 class LarkSequenceSchema(colander.Sequence):
     def serialize(self, node, appstruct, accept_scalar=None):
@@ -276,6 +269,7 @@ float_type = colander.Float()
 bool_type = colander.Boolean()
 datetime_type = colander.DateTime()
 string_bool = StringBool()
+
 
 def node(schema, *args, **kwargs):
     schema.add(colander.SchemaNode(*args, **kwargs))
@@ -338,7 +332,7 @@ node(NameSchema, name_ref_type, name='name')
 
 
 class NamesSchemaNode(LarkSchemaNode):
-    def signature_from_cstruct(self, cstruct, redis_args, redis_kwargs): 
+    def signature_from_cstruct(self, cstruct, redis_args, redis_kwargs):
         return (cstruct['name'], {})
 
 
@@ -355,7 +349,7 @@ node(KeySchema, name_ref_type, name='key')
 
 class KeySchemaNode(LarkSchemaNode):
 
-    def signature_from_cstruct(self, cstruct, redis_args, redis_kwargs): 
+    def signature_from_cstruct(self, cstruct, redis_args, redis_kwargs):
         return (cstruct['key'], {})
 
 
@@ -436,6 +430,7 @@ class NameValuesSchemaNode(LarkSchemaNode):
 NameValuesSchema = NameValuesSchemaNode(LarkMappingSchema())
 node(NameValuesSchema, name_ref_type, name='name')
 NameValuesSchema.add(LarkSchemaNode(colander.Sequence(), LarkSchemaNode(value_type), name='values'))
+
 
 class RemNameValueListSchemaNode(LarkSchemaNode):
 
@@ -637,6 +632,7 @@ OperationDestKeysSchema.add(LarkSchemaNode(colander.Sequence(), LarkSchemaNode(l
 NameWeightTupleSchema = colander.SchemaNode(colander.Tuple())
 NameWeightTupleSchema.add(colander.SchemaNode(lark_string, name='name'))
 NameWeightTupleSchema.add(colander.SchemaNode(int_type, name='weight', missing=None))
+
 
 class DestKeysAggregateSchemaNode(LarkSchemaNode):
 
