@@ -6,7 +6,7 @@ Core Redis API Client
 
 The core redis API client is the main tool that maps from an http request to a redis call.
 
-.. module:: adnpy.api
+.. module:: lark.redis.client
 
 :mod:`lark.redis.client` --- App.net API
 ========================================

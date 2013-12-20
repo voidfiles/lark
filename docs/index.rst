@@ -52,3 +52,8 @@ From here you can run the server and then you will be able to interact with the 
 
 all of this is pretty cool, but this wouldn't be very usefull with out access control. So, there is a lark
 app dedicated to manage oauth2 apps so you can genearate access tokens with specific scopes.
+
+.. toctree::
+   :maxdepth: 2
+
+   redis_api_client
