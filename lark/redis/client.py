@@ -99,7 +99,7 @@ def bind_api_method(method, inbound=DEFAULT_INBOUND_SCHEMA, outbound=DEFAULT_OUT
         'scopes': ', '.join(map(lambda x: '**%s**' % x, list(redis_method_def.scopes))),
     }
     doc = """
-    `redis docs <http://redis.io/commands/%(cmd)s>`_
+    redis docs for `%(cmd)s <http://redis.io/commands/%(cmd)s>`_
 
     Requires one of these scopes: %(scopes)s
 

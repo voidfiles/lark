@@ -5,18 +5,18 @@ Lark is RESTy inteface for redis
     :target: https://travis-ci.org/voidfiles/lark
 
 
-Lark provides a generic method from transforming a HTTP request into a redis command. If you have heard of webdis, the concept is familiar.
+Lark provides a generic method from transforming a HTTP request into a redis command. If you have heard of `webdis <http://webd.is/>`_, the concept is familiar.
 
 Features
 ________
 
-* Support for RESTy interface ie. POST for writes, GET for reads, and DELETE for, well deletes.
-* Speaks JSON, sending, and recieving.
-* Automatic JSON serilization, and deserialization for redis values
+* Support for RESTy interface ie. POST for writes, GET for reads, and DELETE for, well, deletes.
+* Speaks JSON sending and recieving.
+* Automatic JSON serilization and deserialization for redis values
 * Automatic key prefixing for multi-user environments
 * Fully tested adapaters for Flask, and Django
 * Support for scopes based authorization with an eye towards hooking up with `flask-oauthlib <https://flask-oauthlib.readthedocs.org/en/latest/>`_
-* While rough, documentation is available for `all supported methods <http://lark.readthedocs.org/en/latest/redis_api_client.html>`_.
+* While rough, documentation is available for `all supported methods <http://lark.readthedocs.org/en/latest/redis_api_client.html>`_
 
 
 To get started make sure that you have redis installed, and then install lark.
@@ -26,7 +26,7 @@ To get started make sure that you have redis installed, and then install lark.
     pip install lark
 
 
-Next you can create the minimalist of all Flask apps
+Next you can create a simple Flask app that mounts the lark blueprint.
 
 ::
 
@@ -70,6 +70,6 @@ From here you can run the server and then you will be able to interact with the 
 Planned Features
 ________________
 
-* Flask middle ware to support oauth2
-* Webinterface for managing
+* Flask middleware to support oauth2
+* A full Web interface for managing, and editing redis values.
 

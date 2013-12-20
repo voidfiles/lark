@@ -8,13 +8,12 @@ The core redis API client is the main tool that maps from an http request to a r
 
 .. module:: lark.redis.client
 
-:mod:`lark.redis.client` --- App.net API
+:mod:`lark.redis.client.RedisApiClient` --- Redis HTTP Adapater
 ========================================
-.. autoclass:: RedisApiClient
 
 
 Admin Methods
-=============
+-------------
 
 .. autoattribute:: lark.redis.client.RedisApiClient.bgrewriteaof
 
