@@ -107,6 +107,17 @@ class RedisReferenceType(LarkString):
     pass
 
 
+# This is a type that is a reference in to a key, or name in redis.
+# So, this would
+class BinaryValueType(LarkString):
+    def deserialize(self, node, cstruct):
+        cstruct = super(BinaryValueType, self).deserialize(node, cstruct)
+        return cstruct.decode('base64')
+
+    def serialize(self, node, appstruct):
+        return appstruct.encode('base64')
+
+
 # For some keys in redis I want to be able to prefix them transparently from the user
 # That way many users can share the same redis DB
 class PrefixedRedisReferenceType(RedisReferenceType):
@@ -187,15 +198,18 @@ class OutboundSequenceSchema(colander.SequenceSchema):
 
 OutboundValueSchema = colander.SchemaNode(RedisValueType())
 OutboundResultSchema = colander.SchemaNode(NoopType())
+OutBoundBinaryValueSchema = colander.SchemaNode(BinaryValueType())
 
 
 class OutboundKeyValueListSchema(colander.TupleSchema):
     name = colander.SchemaNode(RedisReferenceType())
     value = colander.SchemaNode(RedisValueType())
 
+
 # Schema
 class OutboundValueListSchema(colander.SequenceSchema):
     value = OutboundValueSchema
+
 
 # Scheam
 class OutboundSortSchema(colander.Schema):
@@ -269,6 +283,7 @@ float_type = colander.Float()
 bool_type = colander.Boolean()
 datetime_type = colander.DateTime()
 string_bool = StringBool()
+bin_type = BinaryValueType()
 
 
 def node(schema, *args, **kwargs):
@@ -325,6 +340,11 @@ NoSchema = LarkSchemaNode(LarkMappingSchema())
 
 AddressSchema = LarkSchemaNode(LarkMappingSchema())
 node(AddressSchema, lark_string, name='address')
+
+
+InfotypeKeyScheam = LarkSchemaNode(LarkMappingSchema())
+node(InfotypeKeyScheam, lark_string, name='infotype')
+node(InfotypeKeyScheam, name_ref_type, name='key')
 
 
 NameSchema = LarkSchemaNode(LarkMappingSchema())
@@ -833,3 +853,9 @@ node(ZrangeSchema, int_type, name='end')
 node(ZrangeSchema, string_bool, name='desc', missing=False)
 node(ZrangeSchema, string_bool, name='withscores', missing=False)
 node(ZrangeSchema, lark_string, name='score_cast_func', missing='float')
+
+
+NameTtlBinValueSchema = LarkSchemaNode(LarkMappingSchema())
+node(NameTtlBinValueSchema, name_ref_type, name='name')
+node(NameTtlBinValueSchema, int_type, name='ttl')
+node(NameTtlBinValueSchema, bin_type, name='value')

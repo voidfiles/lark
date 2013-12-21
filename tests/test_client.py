@@ -86,14 +86,14 @@ class RedisCommands(object):
         lastsave = parse_date(data)
         assert isinstance(lastsave, datetime.datetime)
 
-    # def test_object(self):
-    #     self.api_request('/SET/', method='POST', data={'key': 'a', 'value': 'foo'})
-    #     _, data = self.api_request('/OBJECT/refcount/a')
-    #     assert isinstance(data, int)
-    #     _, data = self.api_request('/OBJECT/idlecount/a')
-    #     assert isinstance(data, int)
-    #     _, data = self.api_request('/OBJECT/encoding/a')
-    #     assert data == 'raw'
+    def test_object(self):
+        self.arp('/SET/a/', {'value': 'foo'})
+        data = self.arg('/OBJECT/refcount/a/')
+        assert isinstance(data, int)
+        data = self.arg('/OBJECT/idletime/a/')
+        assert isinstance(data, int)
+        data = self.arg('/OBJECT/encoding/a/')
+        assert data == 'raw'
 
     def test_ping(self):
         self.api_request('/PING/')
@@ -127,15 +127,15 @@ class RedisCommands(object):
         assert self.arg('/BITCOUNT/a/-2/-1/') == 2
         assert self.arg('/BITCOUNT/a/1/1/') == 1
 
-    # def test_bitop_not_empty_string(self):
-    #     self.arp('/SET/', {'key': 'a', 'value': ''})
-    #     self.arp('/BITOP/', {'operation': 'not', 'dest': 'r', 'keys': ['a']})
-    #     assert self.arg('/GET/r/') is None
+    def test_bitop_not_empty_string(self):
+        self.arp('/SET/a/', {'value': ''})
+        self.arp('/BITOP/', {'operation': 'not', 'dest': 'r', 'keys': ['a']})
+        assert self.arg('/GET/r/') is None
 
     # def test_bitop_not(self):
     #     test_str = b(u'\xAA\x00\xFF\x55')
     #     correct = ~0xAA00FF55 & 0xFFFFFFFF
-    #     self.arp('/SET/', {'key': 'a', 'value': test_str})
+    #     self.arp('/SET/a/', {'value': test_str})
     #     self.arp('/BITOP/', {'operation': 'not', 'dest': 'r', 'keys': ['a']})
     #     assert int(binascii.hexlify(self.arg('/GET/r/')), 16) == correct
 
@@ -193,12 +193,12 @@ class RedisCommands(object):
         assert self.arg('/GET/a/') is None
         assert self.arg('/GET/b/') is None
 
-    # def test_dump_and_restore(self):
-    #     self.arp('/SET/', {'key': 'a', 'value': 'foo'})
-    #     dumped = self.arg('/DUMP/a/')
-    #     self.ard('/DEL/a/')
-    #     self.arp('/RESTORE/', {'name': 'a', 'ttl': 0, 'value': dumped})
-    #     assert self.arg('/GET/a/') == b('foo')
+    def test_dump_and_restore(self):
+        self.arp('/SET/a/', {'value': 'foo'})
+        dumped = self.arg('/DUMP/a/')
+        self.ard('/DEL/a/')
+        self.arp('/RESTORE/a/', {'ttl': 0, 'value': dumped})
+        assert self.arg('/GET/a/') == b('foo')
 
     def test_exists(self):
         data = self.arg('/EXISTS/a/')
@@ -306,7 +306,7 @@ class RedisCommands(object):
     def test_incrbyfloat(self):
         assert self.arp('/INCRBYFLOAT/a/') == 1.0
         assert self.arg('/GET/a/') == b('1')
-        assert self.arp('/INCRBYFLOAT/a/', {'amount': 1.1})  == 2.1
+        assert self.arp('/INCRBYFLOAT/a/', {'amount': 1.1}) == 2.1
         assert float(self.arg('/GET/a/')) == float(2.1)
 
     def test_keys(self):
@@ -415,7 +415,7 @@ class RedisCommands(object):
 
     def test_set_ex(self):
         assert self.arp('/SET/a/', {'value': '1', 'ex': 10})
-        assert 0 < self.arg('/TTL/a/')  <= 10
+        assert 0 < self.arg('/TTL/a/') <= 10
 
     def test_set_multipleoptions(self):
         self.arp('/SET/a/', {'value': '1'})
@@ -834,13 +834,13 @@ class RedisCommands(object):
         self.arp('/ZADD/a/', {'scores': [('a1', 1), ('a2', 1), ('a3', 1)]})
         self.arp('/ZADD/b/', {'scores': [('a1', 2), ('a2', 2), ('a3', 2)]})
         self.arp('/ZADD/c/', {'scores': [('a1', 6), ('a3', 5), ('a4', 4)]})
-        assert self.arp('/ZINTERSTORE/', {'dest': 'd', 'keys': {'a': 1, 'b': 2, 'c': 3},}) == 2
+        assert self.arp('/ZINTERSTORE/', {'dest': 'd', 'keys': {'a': 1, 'b': 2, 'c': 3}}) == 2
         assert self.arg('/ZRANGE/d/0/-1/', params=[('withscores', 1)]) == [[b('a3'), 20], [b('a1'), 23]]
 
     def test_zrange(self):
         self.arp('/ZADD/a/', {'scores': [('a1', 1), ('a2', 2), ('a3', 3)]})
         assert self.arg('/ZRANGE/a/0/1/') == [b('a1'), b('a2')]
-        assert self.arg('/ZRANGE/a/1/2/')  == [b('a2'), b('a3')]
+        assert self.arg('/ZRANGE/a/1/2/') == [b('a2'), b('a3')]
 
         # withscores
         assert self.arg('/ZRANGE/a/0/1/', params=[('withscores', 1)]) == [[b('a1'), 1.0], [b('a2'), 2.0]]
@@ -869,7 +869,7 @@ class RedisCommands(object):
         self.arp('/ZADD/a/', {'scores': [('a1', 1), ('a2', 2), ('a3', 3), ('a4', 4), ('a5', 5)]})
         assert self.arg('/ZRANK/a/a1/') == 0
         assert self.arg('/ZRANK/a/a2/') == 1
-        assert self.arg('/ZRANK/a/a6/') == None
+        assert self.arg('/ZRANK/a/a6/') is None
 
     def test_zrem(self):
         self.arp('/ZADD/a/', {'scores': [('a1', 1), ('a2', 2), ('a3', 3)]})
@@ -1285,6 +1285,12 @@ class TestFlaskRedisCommands(RedisCommands, unittest.TestCase):
 
         self.app_ref.config['DEFAULT_LARK_SCOPES'] = DEFAULT_LARK_SCOPES
         self.app_ref.config['LARK_SCOPE_GETTER'] = None
+
+
+try:
+    import django
+except ImportError, e:
+    raise Exception('To run the tests you must have Django installed')
 
 
 from django.conf import settings

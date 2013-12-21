@@ -110,12 +110,6 @@ def bind_api_method(method, inbound=DEFAULT_INBOUND_SCHEMA, outbound=DEFAULT_OUT
     setattr(RedisApiClient, method, run)
 
 
-# build_api_func(OBJECT: NoSchema)
-# def object(self, infotype, key):
-#     "Return the encoding, idletime, or refcount about the key"
-#     return self.execute_command('OBJECT', infotype, key, infotype=infotype)
-
-
 # Admin commands
 bind_api_method('bgrewriteaof', write=True)
 bind_api_method('client_list', read=True)
@@ -132,9 +126,12 @@ bind_api_method('flushdb', write=True)
 bind_api_method('lastsave', read=True)
 bind_api_method('save', write=True)
 bind_api_method('debug_object', read=True, inbound=schemas.KeySchema)
+bind_api_method('object', read=True, inbound=schemas.InfotypeKeyScheam)
 bind_api_method('info', read=True, inbound=schemas.SectionSchema)
 bind_api_method('ping', cmd_type='basic', read=True)
 bind_api_method('echo', cmd_type='basic', read=True, inbound=schemas.ValueSchema)
+bind_api_method('dump', read=True, inbound=schemas.NameSchema, outbound=schemas.OutBoundBinaryValueSchema)
+bind_api_method('restore', write=True, inbound=schemas.NameTtlBinValueSchema)
 
 # Keys
 bind_api_method('randomkey', cmd_type='key', read=True)
@@ -146,8 +143,6 @@ bind_api_method('bitcount', cmd_type='key', read=True, inbound=schemas.KeyRangeO
 bind_api_method('bitop', cmd_type='key', write=True, inbound=schemas.OperationDestKeysSchema)
 bind_api_method('decr', cmd_type='key', write=True, inbound=schemas.NameAmountSchema)
 bind_api_method('delete', cmd_type='key', write=True, inbound=schemas.NamesSchema)
-bind_api_method('dump', cmd_type='key', read=True, inbound=schemas.NameSchema)
-bind_api_method('restore', cmd_type='key', write=True, inbound=schemas.NameTtlValueSchema)
 bind_api_method('exists', cmd_type='key', read=True, inbound=schemas.KeySchema)
 bind_api_method('expire', cmd_type='key', write=True, inbound=schemas.NameTimeSchema)
 bind_api_method('expireat', cmd_type='key', write=True, inbound=schemas.NameWhenSchema)

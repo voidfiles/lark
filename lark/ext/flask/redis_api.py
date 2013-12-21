@@ -124,14 +124,15 @@ build_api_func(['/INFO/<section>', '/INFO/'])
 
 build_api_func('/LASTSAVE/')
 
-# build_api_func('/OBJECT/', NoSchema)
-# def object(self, infotype, key):
-#     "Return the encoding, idletime, or refcount about the key"
-#     return self.execute_command('OBJECT', infotype, key, infotype=infotype)
+build_api_func('/OBJECT/<infotype>/<key>/')
 
 build_api_func('/PING/')
 
 build_api_func('/SAVE/')
+
+build_api_func('/DUMP/<name>/')
+
+build_api_func('/RESTORE/<name>/', methods=['POST'])
 
 # Strings
 build_api_func('/GET/<key>/')
@@ -149,10 +150,6 @@ build_api_func('/BITOP/', methods=['POST'])
 build_api_func(['/DECR/<name>/', '/DECRBY/<name>/'], methods=['POST'], redispy_method='decr')
 
 build_api_func(['/DEL/<name>/', '/DEL/'], methods=['DELETE'], redispy_method='delete')
-
-build_api_func('/DUMP/<name>/')
-
-build_api_func('/RESTORE/', methods=['POST'])
 
 build_api_func('/EXISTS/<key>/')
 
