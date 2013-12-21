@@ -1,32 +1,34 @@
-Lark is RESTy inteface for redis
-================================
+Lark is a RESTy inteface for redis
+==================================
 
 .. image:: https://api.travis-ci.org/voidfiles/lark.png
     :target: https://travis-ci.org/voidfiles/lark
 
 
-Lark provides a generic method from transforming a HTTP request into a redis command. If you have heard of `webdis <http://webd.is/>`_, the concept is familiar.
+Lark is a python library that provides a generic method from transforming a HTTP request into a redis command. If you have heard of `webdis <http://webd.is/>`_ this works in roughly the same way. It provides two main framework specific methods for Django, and Flask. Though it should be easy to fit Lark into any python web framework.
 
 Features
-________
+--------
 
-* Support for RESTy interface ie. POST for writes, GET for reads, and DELETE for, well, deletes.
-* Speaks JSON sending and recieving.
+* Has a RESTy interface ie. POST for writes, GET for reads, and DELETE for, well, deletes
 * Automatic JSON serilization and deserialization for redis values
 * Automatic key prefixing for multi-user environments
-* Fully tested adapaters for Flask, and Django
-* Support for scopes based authorization with an eye towards hooking up with `flask-oauthlib <https://flask-oauthlib.readthedocs.org/en/latest/>`_
+* Fully tested adapaters for Flask and Django
+* Support for scope based authorization with an eye towards hooking up with `flask-oauthlib <https://flask-oauthlib.readthedocs.org/en/latest/>`_
 * While rough, documentation is available for `all supported methods <http://lark.readthedocs.org/en/latest/redis_api_client.html>`_
 
 
-To get started make sure that you have redis installed, and then install lark.
+Quickstart
+----------
+
+To get started make sure that you have `redis <http://redis.io>`_ installed, then install lark.
 
 ::
 
     pip install lark
 
 
-Next you can create a simple Flask app that mounts the lark blueprint.
+Next you can create a simple Flask app that mounts the lark blueprint. Lark also comes with a Redis middleware for setting up redis connections.
 
 ::
 
@@ -48,7 +50,7 @@ Next you can create a simple Flask app that mounts the lark blueprint.
 	    app.run()
 
 
-From here you can run the server and then you will be able to interact with the API like so. You can find documentation on all the calls here.
+Now you can run the server and then you will be able to interact with the API like so. You can find documentation on all the calls here.
 
 
 ::

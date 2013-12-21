@@ -1,16 +1,34 @@
-Welcome to lark's documentation!
-================================
+Lark is a RESTy interface for redis
+===================================
 
-Lark is first and foremost a RESTy interface for redis. At it's core it's just a way of transforming HTTP requests into redis commands, but it comes with a few additions to make this a little more sane. It comes with adapters for Flask, but it would be simple enought to create an adapter that is suited for any other python webframework.
+.. image:: https://api.travis-ci.org/voidfiles/lark.png
+    :target: https://travis-ci.org/voidfiles/lark
 
-To get started make sure that you have redis installed, and then install lark.
+
+Lark is a python library that provides a generic method from transforming a HTTP request into a redis command. If you have heard of `webdis <http://webd.is/>`_ this works in roughly the same way. It provides two main framework specific methods for Django, and Flask. Though it should be easy to fit Lark into any python web framework.
+
+Features
+--------
+
+* Has a RESTy interface ie. POST for writes, GET for reads, and DELETE for, well, deletes
+* Automatic JSON serilization and deserialization for redis values
+* Automatic key prefixing for multi-user environments
+* Fully tested adapaters for Flask and Django
+* Support for scope based authorization with an eye towards hooking up with `flask-oauthlib <https://flask-oauthlib.readthedocs.org/en/latest/>`_
+* While rough, documentation is available for `all supported methods <http://lark.readthedocs.org/en/latest/redis_api_client.html>`_
+
+
+Quickstart
+----------
+
+To get started make sure that you have `redis <http://redis.io>`_ installed, then install lark.
 
 ::
 
     pip install lark
 
 
-Next you can create the minimalist of all Flask apps
+Next you can create a simple Flask app that mounts the lark blueprint. Lark also comes with a Redis middleware for setting up redis connections.
 
 ::
 
@@ -32,7 +50,7 @@ Next you can create the minimalist of all Flask apps
 	    app.run()
 
 
-From here you can run the server and then you will be able to interact with the API like so. You can find documentation on all the calls here.
+Now you can run the server and then you will be able to interact with the API like so. You can find documentation on all the calls here.
 
 
 ::
@@ -50,10 +68,18 @@ From here you can run the server and then you will be able to interact with the 
 	{"meta": {"status": "ok", "status_code": 200}, "data": "foo"}
 
 
-all of this is pretty cool, but this wouldn't be very usefull with out access control. So, there is a lark
-app dedicated to manage oauth2 apps so you can genearate access tokens with specific scopes.
+
+Planned Features
+________________
+
+* Flask middleware to support oauth2
+* A full Web interface for managing, and editing redis values.
+
+
+Reference
+---------
 
 .. toctree::
    :maxdepth: 2
 
-   redis_api_client
+   redis_api_client.rst
