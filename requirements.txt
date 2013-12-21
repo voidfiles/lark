@@ -10,5 +10,5 @@ iso8601==0.1.8
 # For compat
 Flask==0.10.1
 
-# For testing 
+# For testing
 nose==1.3.0
