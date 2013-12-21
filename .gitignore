@@ -1,3 +1,6 @@
 *.pyc
 venv
 docs/_build
+build
+dist
+lark.egg-info
