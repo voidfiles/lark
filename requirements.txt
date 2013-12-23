@@ -9,6 +9,8 @@ iso8601==0.1.8
 
 # For compat
 Flask==0.10.1
+Flask-Bcrypt==0.5.2
+Flask-OAuthlib==0.4.1
 
 # For testing
 nose==1.3.0

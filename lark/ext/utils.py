@@ -17,6 +17,9 @@ class DateTimeJSONEncoder(json.JSONEncoder):
         if isinstance(obj, set):
             return list(obj)
 
+        if obj and hasattr(obj, 'to_json'):
+            obj = obj.to_json()
+        print 'Trying to json encode %s' % (type(obj))
         return super(DateTimeJSONEncoder, self).default(obj)
 
 json_dumps = DateTimeJSONEncoder()

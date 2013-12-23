@@ -17,7 +17,10 @@ from lark.ext.flask.redis_api import redis_api_blueprint
 from lark.ext.flask.flask_redis import Redis
 
 app = Flask(__name__)
-app.config['REDIS_URL'] = 'redis://localhost:6379/10'
+app.config['REDIS_URLS'] = {
+    'main': 'redis://localhost:6379/10',
+    'admin': 'redis://localhost:6379/11',
+}
 app.config['DEBUG'] = True
 app.config['DEFAULT_LARK_SCOPES'] = set(['admin'])
 Redis(app)
