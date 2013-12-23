@@ -1,5 +1,5 @@
-Lark is a RESTy inteface for redis
-==================================
+Lark is a RESTy interface for redis
+===================================
 
 .. image:: https://api.travis-ci.org/voidfiles/lark.png
     :target: https://travis-ci.org/voidfiles/lark
@@ -11,9 +11,9 @@ Features
 --------
 
 * Has a RESTy interface ie. POST for writes, GET for reads, and DELETE for, well, deletes
-* Automatic JSON serilization and deserialization for redis values
+* Automatic JSON serialization and deserialization for redis values
 * Automatic key prefixing for multi-user environments
-* Fully tested adapaters for Flask and Django
+* Fully tested adapters for Flask and Django
 * Support for scope based authorization with an eye towards hooking up with `flask-oauthlib <https://flask-oauthlib.readthedocs.org/en/latest/>`_
 * While rough, documentation is available for `all supported methods <http://lark.readthedocs.org/en/latest/redis_api_client.html>`_
 
@@ -37,7 +37,7 @@ Next you can create a simple Flask app that mounts the lark blueprint. Lark also
 	from lark.ext.flask.flask_redis import Redis
 
 	app = Flask(__name__)
-	# Add a simpple redis connection to the global object
+	# Add a simple redis connection to the global object
 	Redis(app)
 
 	app.config['DEFAULT_LARK_SCOPES'] = set(['admin'])
