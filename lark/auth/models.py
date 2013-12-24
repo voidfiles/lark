@@ -3,7 +3,7 @@ import json
 
 from flask.ext.bcrypt import Bcrypt
 import iso8601
-from lark.ext.utils import json_dumps
+from lark.ext.utils import json_dumps, generate_random_string
 
 
 class StuctRedisModel(dict):
@@ -186,6 +186,25 @@ class Client(StuctRedisModel):
         client = cls.get_by_index(r_con, 'client_id', client_id)
         if not client:
             return None
+
+        return client
+
+    @classmethod
+    def create_from_user(cls, r_con, user, data):
+        while True:
+            client_id = generate_random_string(32)
+            client = cls.get_for_oauth2(r_con, client_id)
+            if not client:
+                break
+
+        data['client_id'] = client_id
+        data['client_secret'] = generate_random_string(32)
+        data['user'] = user
+        data['client_type'] = 'confidential'
+        data['default_scope'] = []
+
+        client = cls(r_con, **data)
+        client.save()
 
         return client
 

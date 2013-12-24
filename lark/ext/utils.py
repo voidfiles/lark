@@ -1,5 +1,7 @@
 import datetime
 import json
+import random
+import string
 
 
 class RedisApiException(Exception):
@@ -23,3 +25,7 @@ class DateTimeJSONEncoder(json.JSONEncoder):
         return super(DateTimeJSONEncoder, self).default(obj)
 
 json_dumps = DateTimeJSONEncoder()
+
+
+def generate_random_string(length=13, chars=string.ascii_letters + string.digits, ):
+    return ''.join(random.choice(chars) for i in range(length))
