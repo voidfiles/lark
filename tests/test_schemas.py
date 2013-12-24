@@ -17,7 +17,6 @@ class SchemaTests(unittest.TestCase):
         cstruct = {}
         with self.assertRaises(Invalid):
             data = self.run_schema(schemas.KeySchema, cstruct)
-            print data
 
     def test_value_schema(self):
         cstruct = {'value': 'awesome'}

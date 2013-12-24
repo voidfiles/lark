@@ -10,8 +10,8 @@ __all__ = ('bind_redis',)
 log = logging.getLogger(__name__)
 
 
-def bind_rcon(func, r_con):
-    return partial(func, r_con)
+def bind_rcon(func, r_con, *args):
+    return partial(func, r_con, *args)
 
 
 def bind_redis(provider, r_con, user=None, client=None,
@@ -32,4 +32,4 @@ def bind_redis(provider, r_con, user=None, client=None,
             raise ValueError(('`current_user` is required'
                               'for Grant Binding'))
         provider.grantgetter(bind_rcon(grant.get_for_oauth2, r_con))
-        provider.grantsetter(bind_rcon(grant.set_for_oauth2, r_con))
+        provider.grantsetter(bind_rcon(grant.set_for_oauth2, r_con, current_user))

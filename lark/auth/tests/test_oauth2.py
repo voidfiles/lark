@@ -1,12 +1,17 @@
-import sys
-import json
 import base64
+import json
+import os
+import sys
 
+from mock import MagicMock
 import redis
 from unittest import TestCase
 
+
 from flask import Flask
+from flask_oauthlib.client import prepare_request
 from .server import create_server, redis_provider
+from .client import create_client
 
 try:
     from urlparse import urlparse
@@ -22,6 +27,7 @@ else:
 
 r_con = redis.Redis.from_url('redis://localhost:6379/11')
 
+os.environ['DEBUG'] = 'true'
 
 def u(text):
     if not isinstance(text, string_type):
@@ -46,8 +52,6 @@ class OAuthSuite(TestCase):
     def setUp(self):
         app = self.create_app()
 
-        app.config.update({})
-
         self.setup_app(app)
 
         self.app = app
@@ -63,6 +67,9 @@ class OAuthSuite(TestCase):
 
     def create_app(self):
         app = Flask(__name__)
+        app.config.update({
+            'OAUTH1_PROVIDER_ENFORCE_SSL': False,
+        })
         app.debug = True
         app.testing = True
         app.secret_key = 'development'
@@ -71,7 +78,31 @@ class OAuthSuite(TestCase):
     def setup_app(self, app):
         oauth = self.create_oauth_provider(app)
         create_server(app, oauth)
+        client = create_client(app)
+        client.http_request = MagicMock(
+            side_effect=self.patch_request(app)
+        )
         return app
+
+    def patch_request(self, app):
+        test_client = app.test_client()
+
+        def make_request(uri, headers=None, data=None, method=None):
+            uri, headers, data, method = prepare_request(
+                uri, headers, data, method
+            )
+
+            # test client is a `werkzeug.test.Client`
+            parsed = urlparse(uri)
+            uri = '%s?%s' % (parsed.path, parsed.query)
+            resp = test_client.open(
+                uri, headers=headers, data=data, method=method
+            )
+            # for compatible
+            resp.code = resp.status_code
+            return resp, resp.data
+
+        return make_request
 
 authorize_url = (
     '/oauth/authorize?response_type=code&client_id=dev'

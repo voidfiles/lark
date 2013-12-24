@@ -25,19 +25,21 @@ def redis_provider(app):
 
 
 def prepare_app(app):
-    user = User(r_con, username='admin', password='awesome')
+    user = User(r_con, username='admin', password='admin')
     user.save()
 
-    user2 = User(r_con, username='admin2', password='awesome')
+    user2 = User(r_con, username='admin2', password='admin2')
     user2.save()
 
     client1 = Client(r_con, name='dev', client_id='dev', client_secret='dev',
+                     default_scope=['address', 'email'],
                      user=user, redirect_uris=('http://localhost:8000/authorized',
                                                'http://localhost/authorized'))
 
     client1.save()
 
     client2 = Client(r_con, name='confidential', client_id='confidential',
+                     default_scope=['address', 'email'],
                      client_secret='confidential', client_type='confidential',
                      user=user2, redirect_uris=('http://localhost:8000/authorized',
                                                 'http://localhost/authorized'))

@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 import json
 
 from flask.ext.bcrypt import Bcrypt
+import iso8601
 from lark.ext.utils import json_dumps
 
 
@@ -43,9 +44,11 @@ class StuctRedisModel(dict):
         return self.to_dict().iteritems()
 
     def serialize(self):
-
         data = self.to_dict()
         return json_dumps.encode(data)
+
+    def for_json(self):
+        return self.to_dict()
 
     def delete(self):
         if not self.pk:
@@ -77,7 +80,6 @@ class StuctRedisModel(dict):
     def get_by_index(cls, r_con, index, *args):
         if index not in cls.indexes:
             raise Exception('%s not in indexes %s' % (index, cls.indexes))
-
         args = ':'.join(args)
         key = '%s:%s:%s' % (cls.key_prefix, index, args)
         pk = r_con.get(key)
@@ -123,7 +125,7 @@ class User(StuctRedisModel):
         super(User, self).__init__(*args, **kwargs)
 
     @classmethod
-    def get_for_oauth2(cls, r_con, username, password):
+    def get_for_oauth2(cls, r_con, username, password, client, request):
         user = cls.get_by_index(r_con, 'username', username)
         if not user:
             return None
@@ -158,6 +160,9 @@ class Client(StuctRedisModel):
         user = kwargs.pop('user', None)
         if user:
             kwargs['user_pk'] = user.pk
+
+        if not kwargs.get('user_pk'):
+            raise Exception('No user model assigned to client')
 
         super(Client, self).__init__(*args, **kwargs)
 
@@ -210,7 +215,25 @@ class Grant(StuctRedisModel):
         if user:
             kwargs['user_pk'] = user.pk
 
+        if not kwargs.get('user_pk'):
+            raise Exception('No user model assigned to grant')
+
+        expires_in = kwargs.pop('expires_in', None)
+        if expires_in:
+            expires = datetime.utcnow() + timedelta(seconds=expires_in)
+        else:
+            expires = 0
+
+        kwargs['expires'] = kwargs.pop('expires', expires)
         super(Grant, self).__init__(*args, **kwargs)
+
+    @property
+    def expires(self):
+        _expires = self.get('expires')
+        if not _expires:
+            return 0
+
+        return iso8601.parse_date(_expires).replace(tzinfo=None)
 
     @property
     def client_id_code(self):
@@ -229,15 +252,22 @@ class Grant(StuctRedisModel):
 
     @classmethod
     def get_for_oauth2(cls, r_con, client_id, code):
+
+        if isinstance(code, dict):
+            code = code.get('code')
+
         return cls.get_by_index(r_con, 'client_id_code', client_id, code)
 
     @classmethod
-    def set_for_oauth2(cls, r_con, client_id, code, request):
+    def set_for_oauth2(cls, r_con, current_user, client_id, code, request):
+        code = code.get('code')
+
         grant = {
             'client_id': client_id,
             'code': code,
-            'user': request.user,
+            'user': current_user(),
             'scope': request.scopes,
+            'expires_in': 600,
         }
 
         grant_inst = cls.get_for_oauth2(r_con, client_id, code)
@@ -276,16 +306,25 @@ class Token(StuctRedisModel):
         if user:
             kwargs['user_pk'] = user.pk
 
+        if not kwargs.get('user_pk'):
+            raise Exception('No user model assigned to token')
+
         client = kwargs.pop('client', None)
         if client:
             kwargs['client_pk'] = client.pk
 
         expires_in = kwargs.pop('expires_in', None)
         if expires_in:
-            kwargs['expires'] = datetime.utcnow() + timedelta(seconds=expires_in)
+            expires = datetime.utcnow() + timedelta(seconds=expires_in)
         else:
-            kwargs['expires'] = 0
+            expires = 0
 
+        kwargs['expires'] = kwargs.pop('expires', expires)
+        scope = kwargs.pop('scope', [])
+        if isinstance(scope, basestring):
+            scope = scope.split(' ')
+
+        kwargs['scope'] = scope
         super(Token, self).__init__(*args, **kwargs)
 
     @property
@@ -306,6 +345,18 @@ class Token(StuctRedisModel):
 
         return self['_client']
 
+    @property
+    def client_id(self):
+        return self.client.client_id
+
+    @property
+    def expires(self):
+        _expires = self.get('expires')
+        if not _expires:
+            return 0
+
+        return iso8601.parse_date(_expires).replace(tzinfo=None)
+
     @classmethod
     def get_for_oauth2(cls, r_con, access_token=None, refresh_token=None):
         token = None
@@ -315,17 +366,22 @@ class Token(StuctRedisModel):
         if not token and refresh_token:
             token = cls.get_by_index(r_con, 'refresh_token', refresh_token)
 
+        if token:
+            return token
+
         return token
 
     @classmethod
     def set_for_oauth2(cls, r_con, token, request, *args, **kwargs):
-        token['client'] = request.client
-        token['user'] = request.user
+        token_data = {}
+        token_data.update(token)
+        token_data['client'] = request.client
+        token_data['user'] = request.user
         token_already = cls.get_for_oauth2(r_con, token['access_token'])
         if token_already:
             return token_already
 
-        token = cls(r_con, **token)
+        token = cls(r_con, **token_data)
         token.save()
 
         return token
