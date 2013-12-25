@@ -33,11 +33,16 @@ class ModelTests(unittest.TestCase):
             valid_attrs = (
                 'pk',
                 'attr',
+                'fk',
             )
 
             indexes = (
                 'attr',
                 'custom_index',
+            )
+
+            list_indexes = (
+                'fk',
             )
 
             @property
@@ -46,6 +51,7 @@ class ModelTests(unittest.TestCase):
 
         model_data = {
             'attr': 'awesome',
+            'fk': 1,
         }
 
         model_data_with_extra = {
@@ -62,21 +68,16 @@ class ModelTests(unittest.TestCase):
         model_data = {
             'pk': None,
             'attr': 'awesome',
+            'fk': 1,
         }
+        test_model = TestModel(r_con, **model_data)
 
         assert test_model.to_dict() == model_data
-        assert test_model.serialize() == '{"pk": null, "attr": "awesome"}'
+
+        assert test_model.serialize() == '{"pk": null, "fk": 1, "attr": "awesome"}'
         test_model.save()
 
-        model_data = {
-            'pk': 1,
-            'attr': 'awesome',
-        }
-
-        assert test_model.to_dict() == model_data
-        assert test_model.serialize() == '{"pk": 1, "attr": "awesome"}'
-
-        assert r_con.get('test:1') == '{"pk": 1, "attr": "awesome"}'
+        assert r_con.get('test:1') == '{"pk": 1, "fk": 1, "attr": "awesome"}'
         assert r_con.get('test:attr:awesome') == '1'
 
         assert TestModel.by_pk(r_con, 1).attr == 'awesome'
@@ -88,10 +89,32 @@ class ModelTests(unittest.TestCase):
         assert r_con.get('test:1') is None
         assert r_con.get('test:attr:awesome') is None
 
+        model_data_1 = {
+            'pk': None,
+            'attr': 'awesome',
+            'fk': 1,
+        }
+
+        model_data_2 = {
+            'pk': None,
+            'attr': 'awesome2',
+            'fk': 1,
+        }
+
+        test_model1 = TestModel(r_con, **model_data_1)
+        test_model1.save()
+        test_model2 = TestModel(r_con, **model_data_2)
+        test_model2.save()
+
+        test_models = TestModel.by_pks(r_con, [test_model1.pk, test_model2.pk])
+        assert len(test_models) == 2
+        test_models = TestModel.get_list_by_index(r_con, 'fk', 1)
+        assert len(test_models) == 2
+
     def test_user(self):
         user = self.create_user()
 
-        assert User.get_for_oauth2(r_con, 'voidfiles', 'awesome').pk == user.pk
+        assert User.get_for_oauth2(r_con, 'voidfiles', 'awesome', {}, {}).pk == user.pk
 
     def create_client(self, user, name='TextApp', description='An awesome test app', client_id='123', client_secret='abc',
                       client_type='normal', default_scope=['email', 'user'],
@@ -155,8 +178,8 @@ class ModelTests(unittest.TestCase):
                 self.user = user
 
         request = Request(user=user)
-
-        grant = Grant.set_for_oauth2(r_con, 'abcdef', '123', request)
+        current_user = lambda: request.user
+        grant = Grant.set_for_oauth2(r_con, current_user, 'abcdef', {'code': '123'}, request)
 
         assert grant.scopes == ['email', 'user']
         assert grant.client_id == 'abcdef'

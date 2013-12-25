@@ -31,7 +31,7 @@ lark_admin_api = Blueprint('lark_admin_api', __name__)
 lark_admin_api.record(init_blueprint)
 
 
-def api_func(func, schema=None, *args, **kwargs):
+def api_func(func, oauth_obj, schema=None, *args, **kwargs):
     status_code = 200
     try:
         try:
@@ -40,11 +40,12 @@ def api_func(func, schema=None, *args, **kwargs):
             request_json = None
 
         if schema:
-            data = schema.serialize(request_json)
+            schema_inst = schema()
+            data = schema_inst.serialize(request_json)
         else:
             data = request_json
 
-        data = func(data, *args, **kwargs)
+        data = func(oauth_obj, data, *args, **kwargs)
         resp_envelope = {
             'meta': {
                 'status': 'ok',
@@ -116,6 +117,6 @@ def access_token():
 @lark_admin_api.route('/clients', methods=['POST'])
 @oauth.require_oauth('admin')
 @json_handler(schema=ClientSchema)
-def create_client(client, request):
-    client = Client.create_from_user(request.user, client)
-    return client.to_dict()
+def create_client(oauth_obj, client):
+    client = Client.create_from_user(g.get_redis_connection('admin'), oauth_obj.user, client)
+    return client.for_api()

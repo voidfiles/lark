@@ -10,6 +10,7 @@ class StuctRedisModel(dict):
     key_prefix = None
     valid_attrs = tuple()
     indexes = tuple()
+    list_indexes = tuple()
 
     def __setattr__(self, name, val):
         return self.__setitem__(name, val)
@@ -60,18 +61,26 @@ class StuctRedisModel(dict):
         for index in self.indexes:
             self.r_con.delete('%s:%s:%s' % (key_root, index, self.get(index)))
 
+        for index in self.list_indexes:
+            self.r_con.lrem('%s:%s:%s' % (key_root, index, self.get(index)), unicode(self.pk), 0)
+
         return self
 
     def save(self):
+        creating = False
         if not self.pk:
+            creating = True
             pk = self.r_con.incr('%s:_meta:pk' % self.key_prefix)
             self.pk = pk
 
         data = self.serialize()
         key_root = '%s' % (self.key_prefix)
         self.r_con.set('%s:%s' % (key_root, self.pk), data)
-        for index in self.indexes:
-            self.r_con.set('%s:%s:%s' % (key_root, index, getattr(self, index)), pk)
+        if creating:
+            for index in self.indexes:
+                self.r_con.set('%s:%s:%s' % (key_root, index, getattr(self, index)), pk)
+            for index in self.list_indexes:
+                self.r_con.lpush('%s:%s:%s' % (key_root, index, getattr(self, index)), unicode(pk))
 
     def __repr__(self):
         return self.serialize()
@@ -80,13 +89,27 @@ class StuctRedisModel(dict):
     def get_by_index(cls, r_con, index, *args):
         if index not in cls.indexes:
             raise Exception('%s not in indexes %s' % (index, cls.indexes))
-        args = ':'.join(args)
+        args = ':'.join(map(unicode, args))
         key = '%s:%s:%s' % (cls.key_prefix, index, args)
         pk = r_con.get(key)
         if pk:
             return cls.by_pk(r_con, pk)
 
         return None
+
+    @classmethod
+    def get_list_by_index(cls, r_con, index, *args):
+        if index not in cls.list_indexes:
+            raise Exception('%s not in indexes %s' % (index, cls.list_indexes))
+        args = ':'.join(map(unicode, args))
+        key = '%s:%s:%s' % (cls.key_prefix, index, args)
+
+        pks = map(int, r_con.lrange(key, 0, -1))
+
+        if pks:
+            items = cls.by_pks(r_con, pks)
+
+        return items
 
     @classmethod
     def by_pk(cls, r_con, pk):
@@ -96,6 +119,15 @@ class StuctRedisModel(dict):
             return cls.from_data(r_con, data)
 
         return data
+
+    @classmethod
+    def by_pks(cls, r_con, pks):
+        keys = ['%s:%s' % (cls.key_prefix, pk) for pk in pks]
+        items = r_con.mget(keys)
+        if items:
+            return [cls.from_data(r_con, item) for item in items]
+
+        return items
 
 bcrypt = Bcrypt()
 
@@ -123,6 +155,12 @@ class User(StuctRedisModel):
             kwargs['password_hash'] = bcrypt.generate_password_hash(password)
 
         super(User, self).__init__(*args, **kwargs)
+
+    def for_api(self):
+        return {
+            'id': self.pk,
+            'username': self.username,
+        }
 
     @classmethod
     def get_for_oauth2(cls, r_con, username, password, client, request):
@@ -156,6 +194,10 @@ class Client(StuctRedisModel):
         'client_id',
     )
 
+    list_indexes = (
+        'user_pk',
+    )
+
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
         if user:
@@ -165,6 +207,16 @@ class Client(StuctRedisModel):
             raise Exception('No user model assigned to client')
 
         super(Client, self).__init__(*args, **kwargs)
+
+    def for_api(self):
+        return {
+            'name': self.name,
+            'description': self.description,
+            'client_id': self.client_id,
+            'client_secret': self.client_secret,
+            'redirect_uris': self.redirect_uris,
+            'user': self.user.for_api()
+        }
 
     @property
     def user(self):
@@ -199,10 +251,9 @@ class Client(StuctRedisModel):
 
         data['client_id'] = client_id
         data['client_secret'] = generate_random_string(32)
-        data['user'] = user
+        data['user_pk'] = user.get('pk')
         data['client_type'] = 'confidential'
         data['default_scope'] = []
-
         client = cls(r_con, **data)
         client.save()
 
