@@ -2,34 +2,29 @@ from __future__ import absolute_import
 from functools import partial
 import logging
 
-from flask import g
 
-__all__ = ('bind_redis',)
+__all__ = ('bind_models',)
 
 
 log = logging.getLogger(__name__)
 
 
-def bind_rcon(func, r_con, *args):
-    return partial(func, r_con, *args)
-
-
-def bind_redis(provider, r_con, user=None, client=None,
-               token=None, grant=None, current_user=None):
+def bind_models(provider, user=None, client=None,
+                token=None, grant=None, current_user=None):
 
     if user:
-        provider.usergetter(bind_rcon(user.get_for_oauth2, r_con))
+        provider.usergetter(user.get_for_oauth2)
 
     if client:
-        provider.clientgetter(bind_rcon(client.get_for_oauth2, r_con))
+        provider.clientgetter(client.get_for_oauth2)
 
     if token:
-        provider.tokengetter(bind_rcon(token.get_for_oauth2, r_con))
-        provider.tokensetter(bind_rcon(token.set_for_oauth2, r_con))
+        provider.tokengetter(token.get_for_oauth2)
+        provider.tokensetter(token.set_for_oauth2)
 
     if grant:
         if not current_user:
             raise ValueError(('`current_user` is required'
                               'for Grant Binding'))
-        provider.grantgetter(bind_rcon(grant.get_for_oauth2, r_con))
-        provider.grantsetter(bind_rcon(grant.set_for_oauth2, r_con, current_user))
+        provider.grantgetter(grant.get_for_oauth2)
+        provider.grantsetter(partial(grant.set_for_oauth2, current_user))

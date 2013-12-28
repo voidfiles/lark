@@ -2,169 +2,71 @@ from datetime import datetime, timedelta
 import json
 
 from flask.ext.bcrypt import Bcrypt
-import iso8601
-from lark.ext.utils import json_dumps, generate_random_string
+from lark.ext.utils import generate_random_string
+from sqlalchemy.types import TypeDecorator, TEXT
+
+from .database import db
 
 
-class StuctRedisModel(dict):
-    key_prefix = None
-    valid_attrs = tuple()
-    indexes = tuple()
-    list_indexes = tuple()
+class JSONEncodedDict(TypeDecorator):
+    """Represents an immutable structure as a json-encoded string.
 
-    def __setattr__(self, name, val):
-        return self.__setitem__(name, val)
+    Usage::
 
-    def __getattr__(self, name):
-        try:
-            return self.__getitem__(name)
-        except KeyError:
-            raise AttributeError(name)
+        JSONEncodedDict(255)
 
-    def __init__(self, r_con, **kwargs):
-        self.r_con = r_con
-        for attr in self.valid_attrs:
-            self[attr] = kwargs.get(attr)
+    """
 
-    @classmethod
-    def from_data(cls, r_con, data):
-        kwargs = json.loads(data)
-        return cls(r_con, **kwargs)
+    impl = TEXT
 
-    def to_dict(self):
-        data = {}
-        for attr in self.valid_attrs:
-            data[attr] = self.get(attr)
+    def process_bind_param(self, value, dialect):
+        if value is not None:
+            value = json.dumps(value)
 
-        return data
+        return value
 
-    def items(self):
-        return self.to_dict().items()
+    def process_result_value(self, value, dialect):
+        if value is not None:
+            value = json.loads(value)
+        return value
 
-    def iteritems(self):
-        return self.to_dict().iteritems()
-
-    def serialize(self):
-        data = self.to_dict()
-        return json_dumps.encode(data)
-
-    def for_json(self):
-        return self.to_dict()
-
-    def delete(self):
-        if not self.pk:
-            return self
-
-        key_root = '%s' % (self.key_prefix)
-
-        self.r_con.delete('%s:%s' % (key_root, self.pk))
-        for index in self.indexes:
-            self.r_con.delete('%s:%s:%s' % (key_root, index, self.get(index)))
-
-        for index in self.list_indexes:
-            self.r_con.lrem('%s:%s:%s' % (key_root, index, self.get(index)), unicode(self.pk), 0)
-
-        return self
-
-    def save(self):
-        creating = False
-        if not self.pk:
-            creating = True
-            pk = self.r_con.incr('%s:_meta:pk' % self.key_prefix)
-            self.pk = pk
-
-        data = self.serialize()
-        key_root = '%s' % (self.key_prefix)
-        self.r_con.set('%s:%s' % (key_root, self.pk), data)
-        if creating:
-            for index in self.indexes:
-                self.r_con.set('%s:%s:%s' % (key_root, index, getattr(self, index)), pk)
-            for index in self.list_indexes:
-                self.r_con.lpush('%s:%s:%s' % (key_root, index, getattr(self, index)), unicode(pk))
-
-    def __repr__(self):
-        return self.serialize()
-
-    @classmethod
-    def get_by_index(cls, r_con, index, *args):
-        if index not in cls.indexes:
-            raise Exception('%s not in indexes %s' % (index, cls.indexes))
-        args = ':'.join(map(unicode, args))
-        key = '%s:%s:%s' % (cls.key_prefix, index, args)
-        pk = r_con.get(key)
-        if pk:
-            return cls.by_pk(r_con, pk)
-
-        return None
-
-    @classmethod
-    def get_list_by_index(cls, r_con, index, *args):
-        if index not in cls.list_indexes:
-            raise Exception('%s not in indexes %s' % (index, cls.list_indexes))
-        args = ':'.join(map(unicode, args))
-        key = '%s:%s:%s' % (cls.key_prefix, index, args)
-
-        pks = map(int, r_con.lrange(key, 0, -1))
-
-        if pks:
-            items = cls.by_pks(r_con, pks)
-
-        return items
-
-    @classmethod
-    def by_pk(cls, r_con, pk):
-        key = '%s:%s' % (cls.key_prefix, pk)
-        data = r_con.get(key)
-        if data:
-            return cls.from_data(r_con, data)
-
-        return data
-
-    @classmethod
-    def by_pks(cls, r_con, pks):
-        keys = ['%s:%s' % (cls.key_prefix, pk) for pk in pks]
-        items = r_con.mget(keys)
-        if items:
-            return [cls.from_data(r_con, item) for item in items]
-
-        return items
 
 bcrypt = Bcrypt()
 
 
-class User(StuctRedisModel):
-    key_prefix = 'user'
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(20), nullable=False)
+    password_hash = db.Column(db.String(40), nullable=False)
+    external_access_token = db.Column(db.String(255), nullable=True)
+    remote_user_id = db.Column(db.Integer)
+    extra_info = db.Column(JSONEncodedDict)
 
-    valid_attrs = (
-        'pk',
-        'username',
-        'password_hash',
-        'external_access_token',
-        'remote_user_id',
-        'extra_info'
-    )
-
-    indexes = (
-        'username',
-        'remote_user_id',
-    )
-
-    def __init__(self, *args, **kwargs):
+    @classmethod
+    def create_user(cls, **kwargs):
         password = kwargs.pop('password', None)
         if password:
             kwargs['password_hash'] = bcrypt.generate_password_hash(password)
 
-        super(User, self).__init__(*args, **kwargs)
+        user = cls(**kwargs)
+        db.session.add(user)
+        db.session.commit()
+
+        return user
 
     def for_api(self):
         return {
-            'id': self.pk,
+            'id': self.id,
             'username': self.username,
         }
 
+    def check_password(self, password):
+        hashed_password = bcrypt.generate_password_hash(password)
+        return hashed_password == self.password
+
     @classmethod
-    def get_for_oauth2(cls, r_con, username, password, client, request):
-        user = cls.get_by_index(r_con, 'username', username)
+    def get_for_oauth2(cls, username, password, client, request):
+        user = cls.query.filter_by(username=username).first()
         if not user:
             return None
 
@@ -174,39 +76,73 @@ class User(StuctRedisModel):
         return user
 
 
-class Client(StuctRedisModel):
-    key_prefix = 'client'
+class Client(db.Model):
+    # human readable name, not required
+    name = db.Column(db.String(40))
 
-    valid_attrs = (
-        'pk',
-        'name',
-        'description',
-        'user_pk',
-        'client_id',
-        'client_secret',
-        'client_type',
-        'default_scope',
-        'redirect_uris',
-        'extra_info'
-    )
+    # human readable description, not required
+    description = db.Column(db.String(400))
 
-    indexes = (
-        'client_id',
-    )
+    # creator of the client, not required
+    user_id = db.Column(db.ForeignKey('user.id'))
+    # required if you need to support client credential
+    user = db.relationship('User', backref="clients")
 
-    list_indexes = (
-        'user_pk',
-    )
+    client_id = db.Column(db.String(40), primary_key=True)
+    client_secret = db.Column(db.String(55), unique=True, index=True,
+                              nullable=False)
 
-    def __init__(self, *args, **kwargs):
-        user = kwargs.pop('user', None)
-        if user:
-            kwargs['user_pk'] = user.pk
+    # public or confidential
+    is_confidential = db.Column(db.Boolean, default=True)
 
-        if not kwargs.get('user_pk'):
-            raise Exception('No user model assigned to client')
+    _redirect_uris = db.Column(db.Text, default='http://localhost:8000')
+    _alowed_grant_types = db.Column(db.Text)
+    _alowed_response_types = db.Column(db.Text)
+    _default_scopes = db.Column(db.Text)
+    extra_info = db.Column(JSONEncodedDict)
 
-        super(Client, self).__init__(*args, **kwargs)
+    @property
+    def client_type(self):
+        if self.is_confidential:
+            return 'confidential'
+        return 'public'
+
+    @property
+    def redirect_uris(self):
+        if self._redirect_uris:
+            return self._redirect_uris.split()
+        return []
+
+    @property
+    def alowed_grant_types(self):
+        if self._alowed_grant_types:
+            return self._alowed_grant_types.split()
+        return []
+
+    @property
+    def alowed_response_types(self):
+        if self._alowed_response_types:
+            return self._alowed_response_types.split()
+        return []
+
+    @property
+    def default_redirect_uri(self):
+        return self.redirect_uris[0]
+
+    @property
+    def default_scopes(self):
+        if self._default_scopes:
+            return self._default_scopes.split()
+        return []
+
+    def update(self, data):
+        self.name = data.get('name')
+        self.description = data.get('description')
+        self._redirect_uris = ' '.join(data.get('redirect_uris'))
+
+        db.session.add(self)
+        db.session.commit()
+        return self
 
     def for_api(self):
         return {
@@ -218,240 +154,151 @@ class Client(StuctRedisModel):
             'user': self.user.for_api()
         }
 
-    @property
-    def user(self):
-        if not self.get('_user'):
-            self['_user'] = User.by_pk(self.r_con, self.user_pk)
-
-        return self['_user']
-
-    @property
-    def default_redirect_uri(self):
-        return self.redirect_uris[0]
-
-    @property
-    def default_scopes(self):
-        return self.default_scope
+    def authorized(self, user):
+        return self.user.id == user.id
 
     @classmethod
-    def get_for_oauth2(cls, r_con, client_id):
-        client = cls.get_by_index(r_con, 'client_id', client_id)
-        if not client:
-            return None
-
-        return client
+    def get_for_oauth2(cls, client_id):
+        return cls.query.filter_by(client_id=client_id).first()
 
     @classmethod
-    def create_from_user(cls, r_con, user, data):
+    def create_from_user(cls, user, data):
         while True:
             client_id = generate_random_string(32)
-            client = cls.get_for_oauth2(r_con, client_id)
+            client = cls.query.filter_by(client_id=client_id).first()
             if not client:
                 break
 
         data['client_id'] = client_id
         data['client_secret'] = generate_random_string(32)
-        data['user_pk'] = user.get('pk')
-        data['client_type'] = 'confidential'
-        data['default_scope'] = []
-        client = cls(r_con, **data)
-        client.save()
+        data['user_id'] = user.id
+        data['is_confidential'] = True
+        data['_default_scopes'] = ''
+        data['_redirect_uris'] = ' '.join(data.pop('redirect_uris', []))
+        client = cls(**data)
+        db.session.add(client)
+        db.session.commit()
 
         return client
 
 
-class Grant(StuctRedisModel):
-    key_prefix = 'grant'
+class Grant(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
 
-    valid_attrs = (
-        'pk',
-        'user_pk',
-        'client_id',
-        'code',
-        'redirect_uri',
-        'scope',
-        'expires',
-        'allowed_grant_types',
-        'allowed_response_types'
-        'extra_info',
+    user_id = db.Column(
+        db.Integer, db.ForeignKey('user.id', ondelete='CASCADE')
     )
+    user = db.relationship('User')
 
-    indexes = (
-        'client_id_code',
+    client_id = db.Column(
+        db.String(40), db.ForeignKey('client.client_id'),
+        nullable=False,
     )
+    client = db.relationship('Client')
 
-    def __init__(self, *args, **kwargs):
-        user = kwargs.pop('user', None)
-        if user:
-            kwargs['user_pk'] = user.pk
+    code = db.Column(db.String(255), index=True, nullable=False)
 
-        if not kwargs.get('user_pk'):
-            raise Exception('No user model assigned to grant')
+    redirect_uri = db.Column(db.String(255))
+    expires = db.Column(db.DateTime)
 
-        expires_in = kwargs.pop('expires_in', None)
-        if expires_in:
-            expires = datetime.utcnow() + timedelta(seconds=expires_in)
-        else:
-            expires = 0
+    _scopes = db.Column(db.Text)
+    extra_info = db.Column(JSONEncodedDict)
 
-        kwargs['expires'] = kwargs.pop('expires', expires)
-        super(Grant, self).__init__(*args, **kwargs)
-
-    @property
-    def expires(self):
-        _expires = self.get('expires')
-        if not _expires:
-            return 0
-
-        return iso8601.parse_date(_expires).replace(tzinfo=None)
-
-    @property
-    def client_id_code(self):
-        return '%s:%s' % (self.client_id, self.code)
-
-    @property
-    def user(self):
-        if not self.get('_user'):
-            self['_user'] = User.by_pk(self.r_con, self.user_pk)
-
-        return self['_user']
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
+        return self
 
     @property
     def scopes(self):
-        return self.scope
+        if self._scopes:
+            return self._scopes.split()
+        return []
 
     @classmethod
-    def get_for_oauth2(cls, r_con, client_id, code):
+    def get_for_oauth2(cls, client_id, code):
 
         if isinstance(code, dict):
             code = code.get('code')
 
-        return cls.get_by_index(r_con, 'client_id_code', client_id, code)
+        return cls.query.filter_by(client_id=client_id, code=code).first()
 
     @classmethod
-    def set_for_oauth2(cls, r_con, current_user, client_id, code, request):
-        code = code.get('code')
-
-        grant = {
-            'client_id': client_id,
-            'code': code,
-            'user': current_user(),
-            'scope': request.scopes,
-            'expires_in': 600,
-        }
-
-        grant_inst = cls.get_for_oauth2(r_con, client_id, code)
-
-        if grant_inst:
-            return grant_inst
-
-        grant = cls(r_con, **grant)
-        grant.save()
+    def set_for_oauth2(cls, current_user, client_id, code, request):
+        # decide the expires time yourself
+        expires = datetime.utcnow() + timedelta(seconds=100)
+        grant = Grant(
+            client_id=client_id,
+            code=code['code'],
+            redirect_uri=request.redirect_uri,
+            _scopes=' '.join(request.scopes),
+            user=current_user(),
+            expires=expires
+        )
+        db.session.add(grant)
+        db.session.commit()
         return grant
 
 
-class Token(StuctRedisModel):
-    key_prefix = 'token'
-
-    valid_attrs = (
-        'pk',
-        'user_pk',
-        'client_pk',
-        'token_type',
-        'access_token',
-        'refresh_token',
-        'expires',
-        'scope',
-        'extra_info',
+class Token(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    client_id = db.Column(
+        db.String(40), db.ForeignKey('client.client_id'),
+        nullable=False,
     )
+    client = db.relationship('Client')
 
-    indexes = (
-        'access_token',
-        'refresh_token',
+    user_id = db.Column(
+        db.Integer, db.ForeignKey('user.id')
     )
+    user = db.relationship('User')
 
-    def __init__(self, *args, **kwargs):
-        kwargs.setdefault('token_type', 'bearer')
-        user = kwargs.pop('user', None)
-        if user:
-            kwargs['user_pk'] = user.pk
+    # currently only bearer is supported
+    token_type = db.Column(db.String(40))
 
-        if not kwargs.get('user_pk'):
-            raise Exception('No user model assigned to token')
-
-        client = kwargs.pop('client', None)
-        if client:
-            kwargs['client_pk'] = client.pk
-
-        expires_in = kwargs.pop('expires_in', None)
-        if expires_in:
-            expires = datetime.utcnow() + timedelta(seconds=expires_in)
-        else:
-            expires = 0
-
-        kwargs['expires'] = kwargs.pop('expires', expires)
-        scope = kwargs.pop('scope', [])
-        if isinstance(scope, basestring):
-            scope = scope.split(' ')
-
-        kwargs['scope'] = scope
-        super(Token, self).__init__(*args, **kwargs)
+    access_token = db.Column(db.String(255), unique=True)
+    refresh_token = db.Column(db.String(255), unique=True)
+    expires = db.Column(db.DateTime)
+    _scopes = db.Column(db.Text)
+    extra_info = db.Column(JSONEncodedDict)
 
     @property
     def scopes(self):
-        return self.scope
-
-    @property
-    def user(self):
-        if not self.get('_user'):
-            self['_user'] = User.by_pk(self.r_con, self.user_pk)
-
-        return self['_user']
-
-    @property
-    def client(self):
-        if not self.get('_client'):
-            self['_client'] = Client.by_pk(self.r_con, self.client_pk)
-
-        return self['_client']
-
-    @property
-    def client_id(self):
-        return self.client.client_id
-
-    @property
-    def expires(self):
-        _expires = self.get('expires')
-        if not _expires:
-            return 0
-
-        return iso8601.parse_date(_expires).replace(tzinfo=None)
+        if self._scopes:
+            return self._scopes.split()
+        return []
 
     @classmethod
-    def get_for_oauth2(cls, r_con, access_token=None, refresh_token=None):
-        token = None
+    def get_for_oauth2(cls, access_token=None, refresh_token=None):
         if access_token:
-            token = cls.get_by_index(r_con, 'access_token', access_token)
-
-        if not token and refresh_token:
-            token = cls.get_by_index(r_con, 'refresh_token', refresh_token)
-
-        if token:
-            return token
-
-        return token
+            return cls.query.filter_by(access_token=access_token).first()
+        elif refresh_token:
+            return cls.query.filter_by(refresh_token=refresh_token).first()
 
     @classmethod
-    def set_for_oauth2(cls, r_con, token, request, *args, **kwargs):
-        token_data = {}
-        token_data.update(token)
-        token_data['client'] = request.client
-        token_data['user'] = request.user
-        token_already = cls.get_for_oauth2(r_con, token['access_token'])
-        if token_already:
-            return token_already
+    def set_for_oauth2(cls, token, request, *args, **kwargs):
+        toks = Token.query.filter_by(client_id=request.client.client_id,
+                                     user_id=request.user.id)
 
-        token = cls(r_con, **token_data)
-        token.save()
+        # make sure that every client has only one token connected to a user
+        for t in toks:
+            db.session.delete(t)
 
-        return token
+        expires_in = token.pop('expires_in')
+        expires = datetime.utcnow() + timedelta(seconds=expires_in)
+        scopes = token['scope']
+        if scopes and not isinstance(scopes, basestring):
+            scopes = ' '.join(scopes)
+
+        tok = Token(
+            access_token=token['access_token'],
+            refresh_token=token['refresh_token'],
+            token_type=token['token_type'],
+            _scopes=scopes,
+            expires=expires,
+            client_id=request.client.client_id,
+            user_id=request.user.id,
+        )
+        db.session.add(tok)
+        db.session.commit()
+        return tok

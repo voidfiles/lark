@@ -5,7 +5,7 @@ from flask_oauthlib.provider import OAuth2Provider
 import redis
 
 from lark.auth.models import User, Client, Grant, Token
-from lark.auth.oauth2 import bind_redis
+from lark.auth.oauth2 import bind_models
 
 
 def current_user():
@@ -18,8 +18,8 @@ r_con = redis.Redis.from_url('redis://localhost:6379/11')
 def redis_provider(app):
     oauth = OAuth2Provider(app)
 
-    bind_redis(oauth, r_con, user=User, token=Token,
-               client=Client, grant=Grant, current_user=current_user)
+    bind_models(oauth, r_con, user=User, token=Token,
+                client=Client, grant=Grant, current_user=current_user)
 
     return oauth
 
